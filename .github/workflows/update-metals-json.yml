@@ -1,0 +1,38 @@
+name: Update metals.json
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update-metals-json:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate metals.json
+        env:
+          METALS_SOURCE_URL: ${{ secrets.METALS_SOURCE_URL }}
+        run: python scripts/update_metals_json.py
+
+      - name: Commit updated metals.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add metals.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "auto update metals.json"
+            git push
+          fi
