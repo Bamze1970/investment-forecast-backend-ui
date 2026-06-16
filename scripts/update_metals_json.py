@@ -1,15 +1,13 @@
 import json
-import os
-import sys
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
-
-SOURCE_URL = os.getenv("METALS_SOURCE_URL", "").strip()
+importstrip()import os
 OUTPUT_FILE = "metals.json"
 
 
 def fetch_json(url: str) -> dict:
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0 GitHubAction metals.json updater"})
+    req = Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 GitHubAction metals.json updater"}
+    )
     with urlopen(req, timeout=30) as resp:
         data = resp.read().decode("utf-8")
         return json.loads(data)
@@ -44,8 +42,6 @@ def main():
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(cleaned, f, ensure_ascii=False, indent=2)
-        f.write("
-")
 
     print("metals.json updated successfully")
     print(json.dumps(cleaned, ensure_ascii=False, indent=2))
@@ -53,3 +49,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+import sys
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
+
