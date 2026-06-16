@@ -1,5 +1,10 @@
 import json
-importstrip()import os
+import os
+import sys
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
+
+SOURCE_URL = os.getenv("METALS_SOURCE_URL", "").strip()
 OUTPUT_FILE = "metals.json"
 
 
@@ -49,7 +54,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-import sys
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
-
