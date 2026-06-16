@@ -1,57 +1,39 @@
-import json
-import os
-import sys
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
+name: Update metals.json
 
-SOURCE_URL = os.getenv("METALS_SOURCE_URL", "").strip()
-OUTPUT_FILE = "metals.json"
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
 
+permissions:
+  contents: write
 
-def fetch_json(url: str) -> dict:
-    req = Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 GitHubAction metals.json updater"}
-    )
-    with urlopen(req, timeout=30) as resp:
-        data = resp.read().decode("utf-8")
-        return json.loads(data)
+jobs:
+  update-metals-json:
+    runs-on: ubuntu-latest
 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-def main():
-    if not SOURCE_URL:
-        print("ERROR: METALS_SOURCE_URL secret is not set.")
-        sys.exit(1)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-    try:
-        data = fetch_json(SOURCE_URL)
-    except HTTPError as e:
-        print(f"ERROR: HTTP error while fetching source: {e}")
-        sys.exit(1)
-    except URLError as e:
-        print(f"ERROR: URL error while fetching source: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"ERROR: Unexpected fetch error: {e}")
-        sys.exit(1)
+      - name: Generate metals.json
+        env:
+          METALS_SOURCE_URL: ${{ secrets.METALS_SOURCE_URL }}
+        run: python scripts/update_metals_json.py
 
-    if "gold_usd_toz" not in data or "silver_usd_toz" not in data:
-        print("ERROR: Source JSON must contain keys: gold_usd_toz and silver_usd_toz")
-        print("Received:", data)
-        sys.exit(1)
-
-    cleaned = {
-        "gold_usd_toz": float(data["gold_usd_toz"]),
-        "silver_usd_toz": float(data["silver_usd_toz"]),
-    }
-
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(cleaned, f, ensure_ascii=False, indent=2)
-        f.write("\\n")
-
-    print("metals.json updated successfully")
-    print(json.dumps(cleaned, ensure_ascii=False, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+      - name: Commit updated metals.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add metals.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "auto update metals.json"
+            git push
+          fi
