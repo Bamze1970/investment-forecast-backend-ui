@@ -7,16 +7,17 @@
   <title>Investment Forecast</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
   <header class="topbar">
     <div>
       <h1>Investment Forecast</h1>
-      <p class="sub">Frontend, свързан с backend API</p>
+      <p class="sub">Backend-connected UI с editable количества, units и price arrows</p>
     </div>
     <div class="header-actions">
       <button id="reloadBtn" class="secondary-btn">Опресни</button>
+      <button id="toggleMoneyBtn" class="secondary-btn">Скрий суми</button>
       <button id="settingsBtn" class="secondary-btn">Настройки</button>
     </div>
   </header>
@@ -31,7 +32,7 @@
   <div id="settingsModal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
       <h2>Настройки</h2>
-      <p class="note">Задай backend URL и Portfolio ID. За текущия seed в backend-а използвай <strong>portfolio-boris-main</strong>.</p>
+      <p class="note">Задай backend URL и Portfolio ID.</p>
       <label for="backendUrlInput">Backend URL</label>
       <input id="backendUrlInput" type="text" placeholder="например https://your-backend.example.com" />
       <label for="portfolioIdInput">Portfolio ID</label>
@@ -49,6 +50,6 @@
     <button id="navHorizons" class="nav-btn">Хоризонти</button>
   </nav>
 
-  <script type="module" src="app.js?v=6"></script>
+  <script type="module" src="app.js?v=7"></script>
 </body>
 </html>
