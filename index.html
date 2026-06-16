@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Investment Forecast</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css?v=6" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Investment Forecast</h1>
+      <p class="sub">Frontend, свързан с backend API</p>
+    </div>
+    <div class="header-actions">
+      <button id="reloadBtn" class="secondary-btn">Опресни</button>
+      <button id="settingsBtn" class="secondary-btn">Настройки</button>
+    </div>
+  </header>
+
+  <div id="statusBar" class="status-bar">Зареждане…</div>
+
+  <main class="container">
+    <section id="dashboardView"></section>
+    <section id="contentView" class="hidden"></section>
+  </main>
+
+  <div id="settingsModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card">
+      <h2>Настройки</h2>
+      <p class="note">Задай backend URL и Portfolio ID. За текущия seed в backend-а използвай <strong>portfolio-boris-main</strong>.</p>
+      <label for="backendUrlInput">Backend URL</label>
+      <input id="backendUrlInput" type="text" placeholder="например https://your-backend.example.com" />
+      <label for="portfolioIdInput">Portfolio ID</label>
+      <input id="portfolioIdInput" type="text" placeholder="например portfolio-boris-main" />
+      <div class="modal-actions">
+        <button id="saveSettingsBtn" class="primary">Запази</button>
+        <button id="closeSettingsBtn" class="secondary-btn">Затвори</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <button id="navDashboard" class="nav-btn active">Dashboard</button>
+    <button id="navHoldings" class="nav-btn">Активи</button>
+    <button id="navHorizons" class="nav-btn">Хоризонти</button>
+  </nav>
+
+  <script type="module" src="app.js?v=6"></script>
+</body>
+</html>
