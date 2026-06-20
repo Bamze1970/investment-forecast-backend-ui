@@ -17,7 +17,7 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
 const backendUrlInput = document.getElementById('backendUrlInput');
 const portfolioIdInput = document.getElementById('portfolioIdInput');
-const saveSettingsBtn('saveSettingsBtn');
+const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const navDashboard = document.getElementById('navDashboard');
 const navHoldings = document.getElementById('navHoldings');
@@ -306,23 +306,6 @@ async function api(path, options = {}) {
   return res.json();
 }
 
-async function healthCheck() {
-  const s = getSettings();
-  const base = (s.backendUrl || '').replace(/\/$/, '');
-  if (!base) return false;
-
-  try {
-    const res = await fetchWithTimeout(
-      `${base}/health?_ts=${Date.now()}`,
-      { cache: 'no-store' },
-      8000
-    );
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function loadAmundiManual() {
   const res = await fetchWithTimeout(
     `./amundi_manual.json?_ts=${Date.now()}`,
@@ -339,6 +322,32 @@ async function loadAmundiManual() {
 
   const data = await res.json();
   return Array.isArray(data) ? data : [];
+}
+
+function renderInitialDashboard() {
+  setActiveNav('dashboard');
+  if (dashboardView) dashboardView.classList.remove('hidden');
+  if (contentView) contentView.classList.add('hidden');
+
+  if (dashboardView) {
+    dashboardView.innerHTML = `
+      <section class="card">
+        <h2>Добре дошъл</h2>
+        <p class="note">
+          Началният екран вече не се зарежда автоматично, за да не блокира приложението.
+        </p>
+        <div class="quick-grid">
+          <button class="quick-btn" id="quickHoldings"><strong>Активи</strong>Отвори списъка с активи</button>
+          <button class="quick-btn" id="quickHorizons"><strong>Хоризонти</strong>Отвори прогнозите</button>
+          <button class="quick-btn" id="quickSettings"><strong>Настройки</strong>Провери backend URL и portfolio ID</button>
+        </div>
+      </section>
+    `;
+  }
+
+  updateDashboardQuickActions();
+  applyMoneyHidden();
+  setStatus('Готово. Избери екран или натисни Опресни.');
 }
 
 function updateDashboardQuickActions() {
@@ -393,7 +402,7 @@ async function loadDashboard() {
     if (dashboardView) {
       dashboardView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
     }
-    setStatus('Backend е бавен или спи. Натисни Опресни след малко.');
+    setStatus('Dashboard не се зареди. Можеш да ползваш Активи или Опресни.');
     throw e;
   }
 }
@@ -421,10 +430,7 @@ function bindHoldingActions(rows) {
         btn.disabled = true;
         setStatus(`Записване на количество за ${row.product_name}...`);
         await patchQuantity(row.id, input.value);
-        await Promise.all([loadDashboard(), loadHoldings()]);
-        if (activeScreen === 'horizons') {
-          await loadHorizons();
-        }
+        await loadHoldings();
         setStatus(`Количеството за ${row.product_name} е записано успешно.`);
       } catch (e) {
         setStatus(`Грешка при запис за ${row.product_name}: ${e.message}`);
@@ -458,7 +464,6 @@ async function loadHoldings() {
         <section class="card">
           <h2>Активи</h2>
           <p class="note">
-            Металите се въвеждат в <strong>грамове</strong>, а backend-ът автоматично изчислява стойността по цена в <strong>EUR/TROY_OUNCE</strong>.
             Onemarkets идват от backend-а, а Amundi цените идват от <strong>amundi_manual.json</strong>.
           </p>
 
@@ -535,7 +540,7 @@ async function loadHoldings() {
     bindHoldingActions(rows);
     applyMoneyHidden();
 
-    setStatus('Активите са заредени успешно. Onemarkets + Amundi manual цени са обновени.');
+    setStatus('Активите са заредени успешно.');
   } catch (e) {
     if (contentView) {
       contentView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
@@ -548,3 +553,207 @@ async function loadHoldings() {
 async function loadHorizons() {
   setActiveNav('horizons');
   if (dashboardView) dashboardView.classList.add('hidden');
+  if (contentView) contentView.classList.remove('hidden');
+  setStatus('Зареждане на прогноза...');
+
+  try {
+    const s = getSettings();
+    const data = await api(
+      `/api/portfolios/${encodeURIComponent(s.portfolioId)}/forecasts?horizon=${encodeURIComponent(selectedHorizon)}&scenario=${encodeURIComponent(selectedScenario)}`
+    );
+
+    const horizons = [
+      ['week', '1 седмица'],
+      ['month', '1 месец'],
+      ['q1', 'Q1'],
+      ['q2', 'Q2'],
+      ['q3', 'Q3'],
+      ['q4', 'Q4'],
+      ['y1', '1Y'],
+      ['y2', '2Y'],
+      ['y3', '3Y'],
+      ['y4', '4Y']
+    ];
+
+    const scenarios = [
+      ['low', 'Песимистичен'],
+      ['base', 'Основен'],
+      ['high', 'Оптимистичен']
+    ];
+
+    if (contentView) {
+      contentView.innerHTML = `
+        <section class="card">
+          <h2>Хоризонти</h2>
+          <p class="note">След смяна на количества натисни <strong>Опресни</strong> или мини пак през Хоризонти.</p>
+
+          <div class="tabs">
+            ${horizons
+              .map(
+                ([k, l]) =>
+                  `<button class="tab ${k === selectedHorizon ? 'active' : ''}" data-h="${k}">${l}</button>`
+              )
+              .join('')}
+          </div>
+
+          <div class="tabs">
+            ${scenarios
+              .map(
+                ([k, l]) =>
+                  `<button class="tab ${k === selectedScenario ? 'active' : ''}" data-s="${k}">${l}</button>`
+              )
+              .join('')}
+          </div>
+
+          <div class="grid grid-2">
+            <div class="metric"><span>Хоризонт</span><strong>${data.horizon}</strong></div>
+            <div class="metric"><span>Сценарий</span><strong>${data.scenario}</strong></div>
+          </div>
+
+          <div class="metric" style="margin-top:12px">
+            <span>Обща стойност</span>
+            <strong class="money">${fmtEuro(data.total_value)}</strong>
+          </div>
+
+          <div class="table-wrap" style="margin-top:12px">
+            <div class="row head-row">
+              <div>Продукт</div>
+              <div></div>
+              <div></div>
+              <div></div>
+              <div>Projected Value</div>
+            </div>
+
+            ${data.lines
+              .map(
+                (line) => `
+                  <div class="row">
+                    <div><strong>${line.product_name}</strong></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div><strong class="money">${fmtEuro(line.projected_value)}</strong></div>
+                  </div>
+                `
+              )
+              .join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    if (contentView) {
+      contentView.querySelectorAll('[data-h]').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          selectedHorizon = btn.dataset.h;
+          loadHorizons();
+        })
+      );
+
+      contentView.querySelectorAll('[data-s]').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          selectedScenario = btn.dataset.s;
+          loadHorizons();
+        })
+      );
+    }
+
+    applyMoneyHidden();
+    setStatus('Прогнозата е заредена успешно.');
+  } catch (e) {
+    if (contentView) {
+      contentView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
+    }
+    setStatus(`Грешка при forecasts: ${e.message}`);
+    throw e;
+  }
+}
+
+function openSettings() {
+  const s = getSettings();
+  if (backendUrlInput) backendUrlInput.value = s.backendUrl || '';
+  if (portfolioIdInput) portfolioIdInput.value = s.portfolioId || '';
+  showModal();
+}
+
+async function refreshCurrentScreen() {
+  if (isRefreshing) {
+    setStatus('Опресняване вече е в процес...');
+    return;
+  }
+
+  isRefreshing = true;
+  const originalText = reloadBtn ? reloadBtn.textContent : 'Опресни';
+
+  if (reloadBtn) {
+    reloadBtn.disabled = true;
+    reloadBtn.textContent = 'Опресняване...';
+    reloadBtn.classList.add('loading');
+  }
+
+  try {
+    if (activeScreen === 'holdings') {
+      await loadHoldings();
+    } else if (activeScreen === 'horizons') {
+      await loadHorizons();
+    } else {
+      await loadDashboard();
+    }
+  } catch (e) {
+    setStatus(`Грешка при опресняване: ${e.message}`);
+  } finally {
+    isRefreshing = false;
+
+    if (reloadBtn) {
+      reloadBtn.disabled = false;
+      reloadBtn.textContent = originalText;
+      reloadBtn.classList.remove('loading');
+    }
+  }
+}
+
+if (reloadBtn) {
+  reloadBtn.addEventListener('click', refreshCurrentScreen);
+}
+
+if (toggleMoneyBtn) {
+  toggleMoneyBtn.addEventListener('click', () => {
+    moneyHidden = !moneyHidden;
+    localStorage.setItem(MONEY_HIDDEN_KEY, moneyHidden ? '1' : '0');
+    applyMoneyHidden();
+  });
+}
+
+if (settingsBtn) settingsBtn.addEventListener('click', openSettings);
+if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', hideModal);
+
+if (saveSettingsBtn) {
+  saveSettingsBtn.addEventListener('click', async () => {
+    const data = {
+      backendUrl: backendUrlInput ? backendUrlInput.value.trim() : DEFAULT_SETTINGS.backendUrl,
+      portfolioId: portfolioIdInput ? portfolioIdInput.value.trim() : DEFAULT_SETTINGS.portfolioId
+    };
+
+    saveSettings(data);
+    hideModal();
+    setStatus('Настройките са записани.');
+    renderInitialDashboard();
+  });
+}
+
+if (navDashboard) navDashboard.addEventListener('click', () => renderInitialDashboard());
+if (navHoldings) navHoldings.addEventListener('click', () => loadHoldings().catch(() => {}));
+if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catch(() => {}));
+
+(function init() {
+  hideModal();
+  applyMoneyHidden();
+
+  if (reloadBtn) {
+    reloadBtn.disabled = false;
+    reloadBtn.textContent = 'Опресни';
+    reloadBtn.classList.remove('loading');
+  }
+
+  renderInitialDashboard();
+})();
