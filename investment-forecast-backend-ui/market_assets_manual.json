@@ -30,7 +30,7 @@
     "name": "Solana",
     "price": 64.38,
     "currency": "EUR",
-    "unit": "EUR",
+    "unit": "EUR/SOL",
     "changePercent": 6.54,
     "changeValue": null,
     "direction": "up",
@@ -39,3 +39,4 @@
     "url": "https://www.binance.com/en/trade/SOL_EUR?type=spot"
   }
 ]
+``
