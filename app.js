@@ -321,6 +321,119 @@ async function healthCheck() {
   }
 }
 
+/* =========================
+   AMUNDI LIVE FROM BROWSER
+   ========================= */
+
+async function fetchAmundiLiveOne(config) {
+  const endpoint = `https://www.amundi.bg/product-services/fdr/share/v3/full/${config.isin}`;
+
+  const res = await fetchWithTimeout(
+    endpoint,
+    {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json;charset=UTF-8'
+      },
+      body: '{}'
+    },
+    12000
+  );
+
+  if (!res.ok) {
+    throw new Error(`Amundi live HTTP ${res.status} for ${config.isin}`);
+  }
+
+  const data = await res.json();
+  if (!Array.isArray(data) || !data.length) {
+    throw new Error(`Amundi live empty response for ${config.isin}`);
+  }
+
+  const share = data[0];
+  const navHistory = Array.isArray(share.navHistory) ? share.navHistory : [];
+
+  if (!navHistory.length) {
+    throw new Error(`Amundi live missing navHistory for ${config.isin}`);
+  }
+
+  const current = navHistory[0];
+  const previous = navHistory[1];
+
+  const currentValue = Number(current?.value);
+  const previousValue = Number(previous?.value);
+
+  let changeValue = null;
+  let changePercent = null;
+  if (Number.isFinite(currentValue) && Number.isFinite(previousValue) && previousValue !== 0) {
+    changeValue = currentValue - previousValue;
+    changePercent = (changeValue / previousValue) * 100;
+  }
+
+  const currency = current?.currency?.iso3Code || 'EUR';
+
+  let direction = 'flat';
+  if (Number.isFinite(changePercent)) {
+    if (changePercent > 0) direction = 'up';
+    if (changePercent < 0) direction = 'down';
+  }
+
+  return {
+    id: config.id,
+    name: share?.label || config.name,
+    isin: share?.isin || config.isin,
+    price: Number.isFinite(currentValue) ? currentValue : null,
+    currency,
+    changePercent,
+    changeValue,
+    direction,
+    lastUpdated: current?.date || null,
+    url: `https://www.amundi.bg/retail/product/view/${config.isin}`,
+    source: 'browser-live'
+  };
+}
+
+async function fetchAmundiLiveDirect() {
+  const configs = [
+    {
+      id: 'amundi_asia_equity_focus_nav_eur',
+      name: 'Amundi Asia Equity Focus',
+      isin: 'LU0557854147'
+    },
+    {
+      id: 'amundi_us_pioneer_nav_eur',
+      name: 'Amundi US Pioneer',
+      isin: 'LU1883872332'
+    }
+  ];
+
+  const results = await Promise.allSettled(configs.map(fetchAmundiLiveOne));
+
+  return results
+    .filter((r) => r.status === 'fulfilled')
+    .map((r) => r.value);
+}
+
+function mergeAmundiData(backendItems, browserItems) {
+  const byId = new Map();
+
+  (Array.isArray(backendItems) ? backendItems : []).forEach((item) => {
+    byId.set(item.id, item);
+  });
+
+  (Array.isArray(browserItems) ? browserItems : []).forEach((item) => {
+    byId.set(item.id, item); // browser-live override
+  });
+
+  return Array.from(byId.values());
+}
+
+/* =========================
+   DASHBOARD
+   ========================= */
+
 function updateDashboardQuickActions() {
   const qh = document.getElementById('quickHoldings');
   if (qh) qh.addEventListener('click', loadHoldings);
@@ -424,14 +537,17 @@ async function loadHoldings() {
   try {
     const s = getSettings();
 
-    const [rows, onemarketData, amundiData] = await Promise.all([
+    const [rows, onemarketData, amundiBackendData, amundiBrowserLive] = await Promise.all([
       api(`/api/portfolios/${encodeURIComponent(s.portfolioId)}/holdings`),
       api('/api/onemarket').catch(() => ({ items: [] })),
-      api('/api/amundi').catch(() => ({ items: [] }))
+      api('/api/amundi').catch(() => ({ items: [] })),
+      fetchAmundiLiveDirect().catch(() => [])
     ]);
 
     const onemarketItems = Array.isArray(onemarketData?.items) ? onemarketData.items : [];
-    const amundiItems = Array.isArray(amundiData?.items) ? amundiData.items : [];
+    const amundiBackendItems = Array.isArray(amundiBackendData?.items) ? amundiBackendData.items : [];
+    const amundiItems = mergeAmundiData(amundiBackendItems, amundiBrowserLive);
+
     const prevCache = getPriceCache();
 
     if (contentView) {
@@ -440,7 +556,7 @@ async function loadHoldings() {
           <h2>Активи</h2>
           <p class="note">
             Металите се въвеждат в <strong>грамове</strong>, а backend-ът автоматично изчислява стойността по цена в <strong>EUR/TROY_OUNCE</strong>.
-            За onemarket и Amundi фондовете се използват актуалните NAV цени от backend-а.
+            За onemarket и Amundi фондовете се използват актуалните NAV цени.
           </p>
 
           <div class="table-wrap">
@@ -517,9 +633,9 @@ async function loadHoldings() {
     applyMoneyHidden();
 
     if (onemarketItems.length > 0 || amundiItems.length > 0) {
-      setStatus('Активите са заредени успешно. Фондовите NAV цени са обновени.');
+      setStatus('Активите са заредени успешно. NAV цените са обновени.');
     } else {
-      setStatus('Активите са заредени успешно. Няма външни фондови NAV данни.');
+      setStatus('Активите са заредени успешно. Няма външни NAV данни.');
     }
   } catch (e) {
     if (contentView) {
