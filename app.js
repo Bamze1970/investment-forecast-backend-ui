@@ -70,6 +70,38 @@ function onemarketBadge(item) {
 }
 
 function findOnemarketMatch(row, items) {
+  function findAmundiMatch(row, items) {
+  const productId = String(row?.product_id || '').trim().toLowerCase();
+
+  const exactMap = {
+    'product-amundi-asia': 'amundi_asia_equity_focus_nav_eur',
+    'product-amundi-china': 'amundi_china_equity_nav_eur',
+    'product-amundi-us-pioneer': 'amundi_us_pioneer_nav_eur'
+  };
+
+  const mappedId = exactMap[productId];
+  if (mappedId) {
+    return items.find((item) => item.id === mappedId) || null;
+  }
+
+  const hay = normalizeText(`${row.product_id} ${row.product_name}`);
+
+  return (
+    items.find((item) => {
+      const itemId = normalizeText(item.id);
+      const itemName = normalizeText(item.name);
+
+      if (itemId && hay.includes(itemId)) return true;
+      if (itemName && (hay.includes(itemName) || itemName.includes(hay))) return true;
+
+      if (hay.includes('amundiasia') && item.id === 'amundi_asia_equity_focus_nav_eur') return true;
+      if (hay.includes('amundichina') && item.id === 'amundi_china_equity_nav_eur') return true;
+      if (hay.includes('amundiuspioneer') && item.id === 'amundi_us_pioneer_nav_eur') return true;
+
+      return false;
+    }) || null
+  );
+}
   const hay = normalizeText(`${row.product_id} ${row.product_name}`);
 
   return (
