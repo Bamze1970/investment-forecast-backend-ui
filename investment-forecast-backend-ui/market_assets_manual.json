@@ -1,0 +1,41 @@
+[
+  {
+    "id": "market_gold_spot_eur_oz",
+    "name": "Gold",
+    "price": 3876.77,
+    "currency": "EUR",
+    "unit": "EUR/TROY_OUNCE",
+    "changePercent": 0.00,
+    "changeValue": null,
+    "direction": "flat",
+    "lastUpdated": "2026-06-20",
+    "source": "manual",
+    "url": null
+  },
+  {
+    "id": "market_silver_spot_eur_oz",
+    "name": "Silver",
+    "price": 57.95,
+    "currency": "EUR",
+    "unit": "EUR/TROY_OUNCE",
+    "changePercent": 0.00,
+    "changeValue": null,
+    "direction": "flat",
+    "lastUpdated": "2026-06-20",
+    "source": "manual",
+    "url": null
+  },
+  {
+    "id": "market_solana_spot_eur",
+    "name": "Solana",
+    "price": null,
+    "currency": "EUR",
+    "unit": "EUR",
+    "changePercent": null,
+    "changeValue": null,
+    "direction": "flat",
+    "lastUpdated": null,
+    "source": "manual",
+    "url": null
+  }
+]
