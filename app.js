@@ -1,7 +1,9 @@
+
 const SETTINGS_KEY = 'inv-backend-settings-v7';
 const PRICE_CACHE_KEY = 'inv-price-cache-v7';
 const MONEY_HIDDEN_KEY = 'inv-money-hidden-v7';
 const REQUEST_TIMEOUT_MS = 15000;
+const TROY_OUNCE_IN_GRAMS = 31.1034768;
 
 const DEFAULT_SETTINGS = {
   backendUrl: 'https://investment-forecast-backen.onrender.com',
@@ -45,7 +47,7 @@ function normalizeText(value) {
   return String(value || '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '');
 }
 
@@ -119,10 +121,7 @@ function sourceBadge(item) {
   const source = String(item?.source || '').toLowerCase();
   const itemId = String(item?.id || '').toLowerCase();
 
-  if (source === 'manual') {
-    return '<span class="source-badge manual">manual</span>';
-  }
-
+  if (source === 'manual') return '<span class="source-badge manual">manual</span>';
   if (
     source === 'live' ||
     source === 'live-fallback' ||
@@ -138,17 +137,25 @@ function fundBadge(item) {
   const direction = String(item?.direction || 'flat').toLowerCase();
   const value = Number(item?.changePercent);
 
-  if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
-    if (direction === 'up') return '<span class="pill up">▲</span>';
-    if (direction === 'down') return '<span class="pill down">▼</span>';
-    return '<span class="pill flat">• 0.00%</span>';
+  if (direction === 'up') {
+    if (Number.isFinite(value) && Math.abs(value) >= 0.0001) {
+      return `<span class="pill up">▲ +${fmtNum(Math.abs(value), 2)}%</span>`;
+    }
+    return '<span class="pill up">▲</span>';
   }
 
-  const pct = fmtNum(Math.abs(value), 2);
+  if (direction === 'down') {
+    if (Number.isFinite(value) && Math.abs(value) >= 0.0001) {
+      return `<span class="pill down">▼ -${fmtNum(Math.abs(value), 2)}%</span>`;
+    }
+    return '<span class="pill down">▼</span>';
+  }
 
-  if (direction === 'up') return `<span class="pill up">▲ +${pct}%</span>`;
-  if (direction === 'down') return `<span class="pill down">▼ -${pct}%</span>`;
-  return `<span class="pill flat">• ${pct}%</span>`;
+  if (Number.isFinite(value) && Math.abs(value) >= 0.0001) {
+    return `<span class="pill flat">• ${fmtNum(Math.abs(value), 2)}%</span>`;
+  }
+
+  return '<span class="pill flat">• 0.00%</span>';
 }
 
 function diffBadge(current, previous) {
@@ -196,9 +203,7 @@ function findOnemarketMatch(row, items) {
       if (
         hay.includes('blackrock') &&
         item.id === 'onemarket_blackrock_global_equity_dynamic_opportunities'
-      ) {
-        return true;
-      }
+      ) return true;
 
       return false;
     }) || null
@@ -239,6 +244,31 @@ function findAmundiMatch(row, items) {
   );
 }
 
+function findMarketAssetMatch(row, items) {
+  const productId = String(row?.product_id || '').trim().toLowerCase();
+
+  const exactMap = {
+    'product-gold': 'market_gold_spot_eur_oz',
+    'product-silver': 'market_silver_spot_eur_oz',
+    'product-solana': 'market_solana_spot_eur'
+  };
+
+  const mappedId = exactMap[productId];
+  if (mappedId) {
+    return items.find((item) => item.id === mappedId) || null;
+  }
+
+  const hay = normalizeText(`${row.product_id} ${row.product_name}`);
+
+  return (
+    items.find((item) => {
+      const itemId = normalizeText(item.id);
+      const itemName = normalizeText(item.name);
+      return (itemId && hay.includes(itemId)) || (itemName && hay.includes(itemName));
+    }) || null
+  );
+}
+
 function getDisplayPrice(row, extItem) {
   const price = Number(extItem?.price);
   return Number.isFinite(price) ? price : Number(row.current_price || 0);
@@ -247,9 +277,16 @@ function getDisplayPrice(row, extItem) {
 function getDisplayValue(row, extItem) {
   const price = Number(extItem?.price);
   const qty = Number(row.quantity_input);
+  const priceUnit = String(extItem?.unit || row.current_price_unit || '').toUpperCase();
+  const qtyUnit = String(row.quantity_input_unit || '').toLowerCase();
+
   if (Number.isFinite(price) && Number.isFinite(qty)) {
+    if (priceUnit.includes('TROY_OUNCE') && qtyUnit.includes('gram')) {
+      return (qty / TROY_OUNCE_IN_GRAMS) * price;
+    }
     return qty * price;
   }
+
   return Number(row.current_value || 0);
 }
 
@@ -304,24 +341,6 @@ async function api(path, options = {}) {
   }
 
   return res.json();
-}
-
-async function loadAmundiManual() {
-  const res = await fetchWithTimeout(
-    `./amundi_manual.json?_ts=${Date.now()}`,
-    {
-      cache: 'no-store',
-      headers: { Accept: 'application/json' }
-    },
-    8000
-  );
-
-  if (!res.ok) {
-    throw new Error(`Не успях да заредя amundi_manual.json (${res.status})`);
-  }
-
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
 }
 
 function updateDashboardQuickActions() {
@@ -447,20 +466,23 @@ async function loadHoldings() {
   try {
     const s = getSettings();
 
-    const [rows, onemarketData, amundiItems] = await Promise.all([
+    const [rows, onemarketData, amundiData, marketAssetsData] = await Promise.all([
       api(`/api/portfolios/${encodeURIComponent(s.portfolioId)}/holdings`),
       api('/api/onemarket').catch(() => ({ items: [] })),
-      loadAmundiManual().catch(() => [])
+      api('/api/amundi').catch(() => ({ items: [] })),
+      api('/api/market-assets').catch(() => ({ items: [] }))
     ]);
 
     const onemarketItems = Array.isArray(onemarketData?.items) ? onemarketData.items : [];
+    const amundiItems = Array.isArray(amundiData?.items) ? amundiData.items : [];
+    const marketItems = Array.isArray(marketAssetsData?.items) ? marketAssetsData.items : [];
     const prevCache = getPriceCache();
 
     if (contentView) {
       contentView.innerHTML = `
         <section class="card">
           <h2>Активи</h2>
-          <p class="note">Onemarkets идват от backend-а, а Amundi цените идват от <strong>amundi_manual.json</strong>.</p>
+          <p class="note">Onemarkets, Amundi и market-assets идват от backend-a.</p>
 
           <div class="table-wrap">
             <div class="row head-row">
@@ -476,15 +498,16 @@ async function loadHoldings() {
                 const prev = prevCache[r.product_id];
                 const om = findOnemarketMatch(r, onemarketItems);
                 const am = findAmundiMatch(r, amundiItems);
-                const ext = om || am;
+                const ma = findMarketAssetMatch(r, marketItems);
+                const ext = om || am || ma;
 
                 const displayPrice = getDisplayPrice(r, ext);
                 const displayValue = getDisplayValue(r, ext);
-                const displayUnit = ext?.currency || r.current_price_unit;
+                const displayUnit = ext?.unit || ext?.currency || r.current_price_unit;
                 const changeHtml = ext ? fundBadge(ext) : diffBadge(displayPrice, prev);
                 const sourceHtml = sourceBadge(ext);
                 const sourceDate = ext?.lastUpdated
-                  ? `<span class="unit-muted">NAV: ${ext.lastUpdated}</span>`
+                  ? `<span class="unit-muted">Updated: ${ext.lastUpdated}</span>`
                   : '';
 
                 return `
@@ -530,7 +553,8 @@ async function loadHoldings() {
     rows.forEach((r) => {
       const om = findOnemarketMatch(r, onemarketItems);
       const am = findAmundiMatch(r, amundiItems);
-      const ext = om || am;
+      const ma = findMarketAssetMatch(r, marketItems);
+      const ext = om || am || ma;
       newCache[r.product_id] = getDisplayPrice(r, ext);
     });
 
@@ -700,7 +724,6 @@ async function refreshCurrentScreen() {
     setStatus(`Грешка при опресняване: ${e.message}`);
   } finally {
     isRefreshing = false;
-
     if (reloadBtn) {
       reloadBtn.disabled = false;
       reloadBtn.textContent = originalText;
