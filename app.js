@@ -1,6 +1,7 @@
 const SETTINGS_KEY = 'inv-backend-settings-v7';
 const PRICE_CACHE_KEY = 'inv-price-cache-v7';
 const MONEY_HIDDEN_KEY = 'inv-money-hidden-v7';
+const REQUEST_TIMEOUT_MS = 15000;
 
 const DEFAULT_SETTINGS = {
   backendUrl: 'https://investment-forecast-backen.onrender.com',
@@ -74,8 +75,7 @@ function findOnemarketMatch(row, items) {
 
   const exactMap = {
     'product-om-jpm': 'onemarket_jpm_us_equities',
-    'product-om-blackrock':
-      'onemarket_blackrock_global_equity_dynamic_opportunities'
+    'product-om-blackrock': 'onemarket_blackrock_global_equity_dynamic_opportunities'
   };
 
   const mappedId = exactMap[productId];
@@ -237,6 +237,26 @@ function diffBadge(current, previous) {
   return `<span class="pill down">▼ ${fmtNum(Math.abs(diffPct), 2)}%</span>`;
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Timeout при връзка с backend-а');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function api(path, options = {}) {
   const s = getSettings();
   const base = (s.backendUrl || '').replace(/\/$/, '');
@@ -250,14 +270,18 @@ async function api(path, options = {}) {
     ? `${base}${path}${path.includes('?') ? '&' : '?'}_ts=${Date.now()}`
     : `${base}${path}`;
 
-  const res = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      Accept: 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {})
+  const res = await fetchWithTimeout(
+    url,
+    {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json',
+        ...(options.body ? { 'Content-Type': 'application/json' } : {})
+      },
+      ...options
     },
-    ...options
-  });
+    REQUEST_TIMEOUT_MS
+  );
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -276,9 +300,11 @@ async function healthCheck() {
   if (!base) return false;
 
   try {
-    const res = await fetch(`${base}/health?_ts=${Date.now()}`, {
-      cache: 'no-store'
-    });
+    const res = await fetchWithTimeout(
+      `${base}/health?_ts=${Date.now()}`,
+      { cache: 'no-store' },
+      8000
+    );
     return res.ok;
   } catch {
     return false;
@@ -308,3 +334,353 @@ async function loadDashboard() {
 
     dashboardView.innerHTML = `
       <section class="card">
+        <h2>Dashboard</h2>
+        <p class="note">Портфейл: <strong>${s.portfolioId}</strong></p>
+        <div class="grid grid-4">
+          <div class="metric"><span>Текущ портфейл</span><strong class="money">${fmtEuro(data.current_total)}</strong></div>
+          <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(data.low_4y)}</strong></div>
+          <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(data.base_4y)}</strong></div>
+          <div class="metric"><span>4Y High</span><strong class="money">${fmtEuro(data.high_4y)}</strong></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Бързи действия</h2>
+        <div class="quick-grid">
+          <button class="quick-btn" id="quickHoldings"><strong>Активи</strong>Редактирай количества</button>
+          <button class="quick-btn" id="quickHorizons"><strong>Хоризонти</strong>Преглед на прогнози low/base/high</button>
+          <button class="quick-btn" id="quickSettings"><strong>Настройки</strong>Backend URL, Portfolio ID, визуализация</button>
+        </div>
+      </section>
+    `;
+
+    updateDashboardQuickActions();
+    applyMoneyHidden();
+    setStatus('Dashboard е зареден успешно.');
+  } catch (e) {
+    dashboardView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
+    setStatus('Backend е бавен или спи. Можеш да ползваш Опресни след малко.');
+  }
+}
+
+async function patchQuantity(holdingId, quantity) {
+  const s = getSettings();
+
+  return api(
+    `/api/portfolios/${encodeURIComponent(s.portfolioId)}/holdings/${encodeURIComponent(holdingId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ quantity_input: Number(quantity) })
+    }
+  );
+}
+
+function bindHoldingActions(rows) {
+  rows.forEach((row) => {
+    const btn = document.getElementById(`save-${row.id}`);
+    const input = document.getElementById(`qty-${row.id}`);
+    if (!btn || !input) return;
+
+    btn.addEventListener('click', async () => {
+      try {
+        btn.disabled = true;
+        setStatus(`Записване на количество за ${row.product_name}...`);
+        await patchQuantity(row.id, input.value);
+        await Promise.all([loadDashboard(), loadHoldings()]);
+        if (activeScreen === 'horizons') await loadHorizons();
+        setStatus(`Количеството за ${row.product_name} е записано успешно.`);
+      } catch (e) {
+        setStatus(`Грешка при запис за ${row.product_name}: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+async function loadHoldings() {
+  setActiveNav('holdings');
+  dashboardView.classList.add('hidden');
+  contentView.classList.remove('hidden');
+  setStatus('Зареждане на активи...');
+
+  try {
+    const s = getSettings();
+
+    const [rows, onemarketData, amundiData] = await Promise.all([
+      api(`/api/portfolios/${encodeURIComponent(s.portfolioId)}/holdings`),
+      api('/api/onemarket').catch(() => ({ items: [] })),
+      api('/api/amundi').catch(() => ({ items: [] }))
+    ]);
+
+    const onemarketItems = Array.isArray(onemarketData?.items) ? onemarketData.items : [];
+    const amundiItems = Array.isArray(amundiData?.items) ? amundiData.items : [];
+    const prevCache = getPriceCache();
+
+    contentView.innerHTML = `
+      <section class="card">
+        <h2>Активи</h2>
+        <p class="note">
+          Металите се въвеждат в <strong>грамове</strong>, а backend-ът автоматично изчислява стойността по цена в <strong>EUR/TROY_OUNCE</strong>.
+          За onemarket и Amundi фондовете се използват актуалните NAV цени от backend-а.
+        </p>
+
+        <div class="table-wrap">
+          <div class="row head-row">
+            <div>Продукт</div>
+            <div>Количество</div>
+            <div>Цена</div>
+            <div>Промяна</div>
+            <div>Стойност</div>
+          </div>
+
+          ${rows
+            .map((r) => {
+              const prev = prevCache[r.product_id];
+              const om = findOnemarketMatch(r, onemarketItems);
+              const am = findAmundiMatch(r, amundiItems);
+              const ext = om || am;
+
+              const displayPrice = getDisplayPrice(r, ext);
+              const displayValue = getDisplayValue(r, ext);
+              const displayUnit = ext?.currency || r.current_price_unit;
+              const changeHtml = ext ? fundBadge(ext) : diffBadge(displayPrice, prev);
+              const sourceDate = ext?.lastUpdated
+                ? `<span class="unit-muted">NAV: ${ext.lastUpdated}</span>`
+                : '';
+
+              return `
+                <div class="row">
+                  <div>
+                    <strong>${r.product_name}</strong>
+                    <span class="unit-muted mono">${r.product_id}</span>
+                  </div>
+
+                  <div>
+                    <input id="qty-${r.id}" class="qty-inline" type="number" step="0.00000001" value="${r.quantity_input}" />
+                    <span class="unit-muted">${r.quantity_input_unit}</span>
+                    <div class="inline-actions">
+                      <button id="save-${r.id}" class="secondary-btn small-btn">Запази</button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <strong>${fmtNum(displayPrice, 2)}</strong>
+                    <span class="unit-muted">${displayUnit}</span>
+                    ${sourceDate}
+                  </div>
+
+                  <div>${changeHtml}</div>
+
+                  <div>
+                    <strong class="money">${fmtEuro(displayValue)}</strong>
+                    <span class="unit-muted">${r.currency}</span>
+                  </div>
+                </div>
+              `;
+            })
+            .join('')}
+        </div>
+      </section>
+    `;
+
+    const newCache = { ...prevCache };
+    rows.forEach((r) => {
+      const om = findOnemarketMatch(r, onemarketItems);
+      const am = findAmundiMatch(r, amundiItems);
+      const ext = om || am;
+      newCache[r.product_id] = getDisplayPrice(r, ext);
+    });
+
+    setPriceCache(newCache);
+    lastHoldings = rows;
+    bindHoldingActions(rows);
+    applyMoneyHidden();
+
+    if (onemarketItems.length > 0 || amundiItems.length > 0) {
+      setStatus('Активите са заредени успешно. Фондовите NAV цени са обновени.');
+    } else {
+      setStatus('Активите са заредени успешно. Няма външни фондови NAV данни.');
+    }
+  } catch (e) {
+    contentView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
+    setStatus('Грешка при holdings.');
+  }
+}
+
+async function loadHorizons() {
+  setActiveNav('horizons');
+  dashboardView.classList.add('hidden');
+  contentView.classList.remove('hidden');
+  setStatus('Зареждане на прогноза...');
+
+  try {
+    const s = getSettings();
+    const data = await api(
+      `/api/portfolios/${encodeURIComponent(s.portfolioId)}/forecasts?horizon=${encodeURIComponent(selectedHorizon)}&scenario=${encodeURIComponent(selectedScenario)}`
+    );
+
+    const horizons = [
+      ['week', '1 седмица'],
+      ['month', '1 месец'],
+      ['q1', 'Q1'],
+      ['q2', 'Q2'],
+      ['q3', 'Q3'],
+      ['q4', 'Q4'],
+      ['y1', '1Y'],
+      ['y2', '2Y'],
+      ['y3', '3Y'],
+      ['y4', '4Y']
+    ];
+
+    const scenarios = [
+      ['low', 'Песимистичен'],
+      ['base', 'Основен'],
+      ['high', 'Оптимистичен']
+    ];
+
+    contentView.innerHTML = `
+      <section class="card">
+        <h2>Хоризонти</h2>
+        <p class="note">След смяна на количества натисни <strong>Опресни</strong> или мини пак през Хоризонти.</p>
+
+        <div class="tabs">
+          ${horizons
+            .map(
+              ([k, l]) =>
+                `<button class="tab ${k === selectedHorizon ? 'active' : ''}" data-h="${k}">${l}</button>`
+            )
+            .join('')}
+        </div>
+
+        <div class="tabs">
+          ${scenarios
+            .map(
+              ([k, l]) =>
+                `<button class="tab ${k === selectedScenario ? 'active' : ''}" data-s="${k}">${l}</button>`
+            )
+            .join('')}
+        </div>
+
+        <div class="grid grid-2">
+          <div class="metric"><span>Хоризонт</span><strong>${data.horizon}</strong></div>
+          <div class="metric"><span>Сценарий</span><strong>${data.scenario}</strong></div>
+        </div>
+
+        <div class="metric" style="margin-top:12px">
+          <span>Обща стойност</span>
+          <strong class="money">${fmtEuro(data.total_value)}</strong>
+        </div>
+
+        <div class="table-wrap" style="margin-top:12px">
+          <div class="row head-row">
+            <div>Продукт</div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div>Projected Value</div>
+          </div>
+
+          ${data.lines
+            .map(
+              (line) => `
+                <div class="row">
+                  <div><strong>${line.product_name}</strong></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div><strong class="money">${fmtEuro(line.projected_value)}</strong></div>
+                </div>
+              `
+            )
+            .join('')}
+        </div>
+      </section>
+    `;
+
+    contentView.querySelectorAll('[data-h]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        selectedHorizon = btn.dataset.h;
+        loadHorizons();
+      })
+    );
+
+    contentView.querySelectorAll('[data-s]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        selectedScenario = btn.dataset.s;
+        loadHorizons();
+      })
+    );
+
+    applyMoneyHidden();
+    setStatus('Прогнозата е заредена успешно.');
+  } catch (e) {
+    contentView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
+    setStatus('Грешка при forecasts.');
+  }
+}
+
+function openSettings() {
+  const s = getSettings();
+  backendUrlInput.value = s.backendUrl || '';
+  portfolioIdInput.value = s.portfolioId || '';
+  showModal();
+}
+
+reloadBtn.addEventListener('click', async () => {
+  reloadBtn.disabled = true;
+  setStatus('Опресняване...');
+
+  try {
+    if (activeScreen === 'holdings') {
+      await loadHoldings();
+      return;
+    }
+
+    if (activeScreen === 'horizons') {
+      await loadHorizons();
+      return;
+    }
+
+    await loadDashboard();
+  } finally {
+    reloadBtn.disabled = false;
+  }
+});
+
+toggleMoneyBtn.addEventListener('click', () => {
+  moneyHidden = !moneyHidden;
+  localStorage.setItem(MONEY_HIDDEN_KEY, moneyHidden ? '1' : '0');
+  applyMoneyHidden();
+});
+
+settingsBtn.addEventListener('click', openSettings);
+closeSettingsBtn.addEventListener('click', hideModal);
+
+saveSettingsBtn.addEventListener('click', async () => {
+  const data = {
+    backendUrl: backendUrlInput.value.trim(),
+    portfolioId: portfolioIdInput.value.trim()
+  };
+
+  saveSettings(data);
+  hideModal();
+  setStatus('Настройките са записани. Зареждане...');
+
+  await loadDashboard();
+});
+
+navDashboard.addEventListener('click', loadDashboard);
+navHoldings.addEventListener('click', loadHoldings);
+navHorizons.addEventListener('click', loadHorizons);
+
+(function init() {
+  hideModal();
+  applyMoneyHidden();
+  setStatus('Свързване с backend...');
+
+  // Не блокирай UI при стартиране
+  loadDashboard().catch(() => {
+    setStatus('Backend е недостъпен в момента. Можеш да натиснеш Опресни.');
+  });
+})();
