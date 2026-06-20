@@ -24,9 +24,8 @@ const navHoldings = document.getElementById('navHoldings');
 const navHorizons = document.getElementById('navHorizons');
 
 let selectedScenario = 'base';
-let activeScreen = 'dashboard';
 let selectedHorizon = 'y4';
-let lastHoldings = [];
+let activeScreen = 'dashboard';
 let moneyHidden = localStorage.getItem(MONEY_HIDDEN_KEY) === '1';
 let isRefreshing = false;
 
@@ -50,27 +49,68 @@ function normalizeText(value) {
     .replace(/[^a-z0-9]+/g, '');
 }
 
-function fundBadge(item) {
-  const direction = String(item?.direction || 'flat').toLowerCase();
-  const value = Number(item?.changePercent);
-
-  if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
-    if (direction === 'up') return '<span class="pill up">▲</span>';
-    if (direction === 'down') return '<span class="pill down">▼</span>';
-    return '<span class="pill flat">• 0.00%</span>';
+function getSettings() {
+  try {
+    return {
+      ...DEFAULT_SETTINGS,
+      ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'))
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
   }
+}
 
-  const pct = fmtNum(Math.abs(value), 2);
+function saveSettings(data) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
+}
 
-  if (direction === 'up') {
-    return `<span class="pill up">▲ +${pct}%</span>`;
+function setStatus(text) {
+  if (statusBar) statusBar.textContent = text;
+}
+
+function showModal() {
+  if (!settingsModal) return;
+  settingsModal.classList.remove('hidden');
+  settingsModal.style.display = 'flex';
+  settingsModal.setAttribute('aria-hidden', 'false');
+}
+
+function hideModal() {
+  if (!settingsModal) return;
+  settingsModal.classList.add('hidden');
+  settingsModal.style.display = 'none';
+  settingsModal.setAttribute('aria-hidden', 'true');
+}
+
+function setActiveNav(key) {
+  [navDashboard, navHoldings, navHorizons]
+    .filter(Boolean)
+    .forEach((x) => x.classList.remove('active'));
+
+  if (key === 'dashboard' && navDashboard) navDashboard.classList.add('active');
+  if (key === 'holdings' && navHoldings) navHoldings.classList.add('active');
+  if (key === 'horizons' && navHorizons) navHorizons.classList.add('active');
+
+  activeScreen = key;
+}
+
+function applyMoneyHidden() {
+  document.body.classList.toggle('money-hidden', moneyHidden);
+  if (toggleMoneyBtn) {
+    toggleMoneyBtn.textContent = moneyHidden ? 'Покажи суми' : 'Скрий суми';
   }
+}
 
-  if (direction === 'down') {
-    return `<span class="pill down">▼ -${pct}%</span>`;
+function getPriceCache() {
+  try {
+    return JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || '{}');
+  } catch {
+    return {};
   }
+}
 
-  return `<span class="pill flat">• ${pct}%</span>`;
+function setPriceCache(data) {
+  localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(data));
 }
 
 function sourceBadge(item) {
@@ -92,6 +132,37 @@ function sourceBadge(item) {
   }
 
   return '<span class="source-badge fallback">fallback</span>';
+}
+
+function fundBadge(item) {
+  const direction = String(item?.direction || 'flat').toLowerCase();
+  const value = Number(item?.changePercent);
+
+  if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
+    if (direction === 'up') return '<span class="pill up">▲</span>';
+    if (direction === 'down') return '<span class="pill down">▼</span>';
+    return '<span class="pill flat">• 0.00%</span>';
+  }
+
+  const pct = fmtNum(Math.abs(value), 2);
+
+  if (direction === 'up') return `<span class="pill up">▲ +${pct}%</span>`;
+  if (direction === 'down') return `<span class="pill down">▼ -${pct}%</span>`;
+  return `<span class="pill flat">• ${pct}%</span>`;
+}
+
+function diffBadge(current, previous) {
+  if (previous === undefined || previous === null || Number.isNaN(previous) || previous === 0) {
+    return '<span class="pill flat">• 0.00%</span>';
+  }
+
+  const diffPct = ((current - previous) / previous) * 100;
+  if (Math.abs(diffPct) < 0.0001) {
+    return '<span class="pill flat">• 0.00%</span>';
+  }
+
+  if (diffPct > 0) return `<span class="pill up">▲ ${fmtNum(diffPct, 2)}%</span>`;
+  return `<span class="pill down">▼ ${fmtNum(Math.abs(diffPct), 2)}%</span>`;
 }
 
 function findOnemarketMatch(row, items) {
@@ -125,9 +196,7 @@ function findOnemarketMatch(row, items) {
       if (
         hay.includes('blackrock') &&
         item.id === 'onemarket_blackrock_global_equity_dynamic_opportunities'
-      ) {
-        return true;
-      }
+      ) return true;
 
       return false;
     }) || null
@@ -137,44 +206,3 @@ function findOnemarketMatch(row, items) {
 function findAmundiMatch(row, items) {
   const productId = String(row?.product_id || '').trim().toLowerCase();
 
-  const exactMap = {
-    'product-amundi-asia': 'amundi_asia_equity_focus_nav_eur',
-    'product-amundi-china': 'amundi_china_equity_nav_eur',
-    'product-amundi-us': 'amundi_us_pioneer_nav_eur',
-    'product-amundi-us-pioneer': 'amundi_us_pioneer_nav_eur'
-  };
-
-  const mappedId = exactMap[productId];
-  if (mappedId) {
-    return items.find((item) => item.id === mappedId) || null;
-  }
-
-  const hay = normalizeText(`${row.product_id} ${row.product_name}`);
-
-  return (
-    items.find((item) => {
-      const itemId = normalizeText(item.id);
-      const itemName = normalizeText(item.name);
-
-      if (itemId && hay.includes(itemId)) return true;
-      if (itemName && (hay.includes(itemName) || itemName.includes(hay))) return true;
-
-      if (hay.includes('amundiasia') && item.id === 'amundi_asia_equity_focus_nav_eur') return true;
-      if (hay.includes('amundichina') && item.id === 'amundi_china_equity_nav_eur') return true;
-      if (hay.includes('amundiuspioneer') && item.id === 'amundi_us_pioneer_nav_eur') return true;
-
-      return false;
-    }) || null
-  );
-}
-
-function getDisplayPrice(row, extItem) {
-  const price = Number(extItem?.price);
-  return Number.isFinite(price) ? price : Number(row.current_price || 0);
-}
-
-function getDisplayValue(row, extItem) {
-  const price = Number(extItem?.price);
-  const qty = Number(row.quantity_input);
-
-  if (Number.isFinite(price) && Number.isFinite(qty)) {
