@@ -294,8 +294,6 @@ input[type="number"] {
   background: transparent;
 }
 
-/* ===== Product + source badges ===== */
-
 .product-head {
   display: flex;
   align-items: center;
@@ -320,3 +318,61 @@ input[type="number"] {
 .source-badge.live {
   background: rgba(34, 197, 94, 0.14);
   color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.source-badge.manual {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.source-badge.fallback {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+  border: 1px solid transparent;
+  letter-spacing: 0.01em;
+}
+
+.pill.up {
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.32);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.06) inset;
+}
+
+.pill.down {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.32);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.06) inset;
+}
+
+.pill.flat {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+@media (max-width: 1100px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-4,
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
