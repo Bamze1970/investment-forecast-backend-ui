@@ -28,18 +28,19 @@ let activeScreen = 'dashboard';
 let selectedHorizon = 'y4';
 let lastHoldings = [];
 let moneyHidden = localStorage.getItem(MONEY_HIDDEN_KEY) === '1';
+let isRefreshing = false;
 
 const fmtEuro = (v) =>
   new Intl.NumberFormat('bg-BG', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }).format(v) + ' €';
+  }).format(Number(v || 0)) + ' €';
 
 const fmtNum = (v, d = 2) =>
   new Intl.NumberFormat('bg-BG', {
     minimumFractionDigits: d,
     maximumFractionDigits: d
-  }).format(v);
+  }).format(Number(v || 0));
 
 function normalizeText(value) {
   return String(value || '')
@@ -116,6 +117,7 @@ function findAmundiMatch(row, items) {
   const exactMap = {
     'product-amundi-asia': 'amundi_asia_equity_focus_nav_eur',
     'product-amundi-china': 'amundi_china_equity_nav_eur',
+    'product-amundi-us': 'amundi_us_pioneer_nav_eur',
     'product-amundi-us-pioneer': 'amundi_us_pioneer_nav_eur'
   };
 
@@ -145,7 +147,7 @@ function findAmundiMatch(row, items) {
 
 function getDisplayPrice(row, extItem) {
   const price = Number(extItem?.price);
-  return Number.isFinite(price) ? price : row.current_price;
+  return Number.isFinite(price) ? price : Number(row.current_price || 0);
 }
 
 function getDisplayValue(row, extItem) {
@@ -156,7 +158,7 @@ function getDisplayValue(row, extItem) {
     return qty * price;
   }
 
-  return row.current_value;
+  return Number(row.current_value || 0);
 }
 
 function getSettings() {
@@ -175,32 +177,42 @@ function saveSettings(data) {
 }
 
 function setStatus(text) {
-  statusBar.textContent = text;
+  if (statusBar) {
+    statusBar.textContent = text;
+  }
 }
 
 function showModal() {
+  if (!settingsModal) return;
   settingsModal.classList.remove('hidden');
   settingsModal.style.display = 'flex';
   settingsModal.setAttribute('aria-hidden', 'false');
 }
 
 function hideModal() {
+  if (!settingsModal) return;
   settingsModal.classList.add('hidden');
   settingsModal.style.display = 'none';
   settingsModal.setAttribute('aria-hidden', 'true');
 }
 
 function setActiveNav(key) {
-  [navDashboard, navHoldings, navHorizons].forEach((x) => x.classList.remove('active'));
-  if (key === 'dashboard') navDashboard.classList.add('active');
-  if (key === 'holdings') navHoldings.classList.add('active');
-  if (key === 'horizons') navHorizons.classList.add('active');
+  [navDashboard, navHoldings, navHorizons]
+    .filter(Boolean)
+    .forEach((x) => x.classList.remove('active'));
+
+  if (key === 'dashboard' && navDashboard) navDashboard.classList.add('active');
+  if (key === 'holdings' && navHoldings) navHoldings.classList.add('active');
+  if (key === 'horizons' && navHorizons) navHorizons.classList.add('active');
+
   activeScreen = key;
 }
 
 function applyMoneyHidden() {
   document.body.classList.toggle('money-hidden', moneyHidden);
-  toggleMoneyBtn.textContent = moneyHidden ? 'Покажи суми' : 'Скрий суми';
+  if (toggleMoneyBtn) {
+    toggleMoneyBtn.textContent = moneyHidden ? 'Покажи суми' : 'Скрий суми';
+  }
 }
 
 function getPriceCache() {
@@ -242,11 +254,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_M
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, {
+    return await fetch(url, {
       ...options,
       signal: controller.signal
     });
-    return response;
   } catch (error) {
     if (error.name === 'AbortError') {
       throw new Error('Timeout при връзка с backend-а');
@@ -296,7 +307,6 @@ async function api(path, options = {}) {
 async function healthCheck() {
   const s = getSettings();
   const base = (s.backendUrl || '').replace(/\/$/, '');
-
   if (!base) return false;
 
   try {
@@ -324,42 +334,47 @@ function updateDashboardQuickActions() {
 
 async function loadDashboard() {
   setActiveNav('dashboard');
-  dashboardView.classList.remove('hidden');
-  contentView.classList.add('hidden');
+  if (dashboardView) dashboardView.classList.remove('hidden');
+  if (contentView) contentView.classList.add('hidden');
   setStatus('Зареждане на dashboard...');
 
   try {
     const s = getSettings();
     const data = await api(`/api/portfolios/${encodeURIComponent(s.portfolioId)}/dashboard`);
 
-    dashboardView.innerHTML = `
-      <section class="card">
-        <h2>Dashboard</h2>
-        <p class="note">Портфейл: <strong>${s.portfolioId}</strong></p>
-        <div class="grid grid-4">
-          <div class="metric"><span>Текущ портфейл</span><strong class="money">${fmtEuro(data.current_total)}</strong></div>
-          <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(data.low_4y)}</strong></div>
-          <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(data.base_4y)}</strong></div>
-          <div class="metric"><span>4Y High</span><strong class="money">${fmtEuro(data.high_4y)}</strong></div>
-        </div>
-      </section>
+    if (dashboardView) {
+      dashboardView.innerHTML = `
+        <section class="card">
+          <h2>Dashboard</h2>
+          <p class="note">Портфейл: <strong>${s.portfolioId}</strong></p>
+          <div class="grid grid-4">
+            <div class="metric"><span>Текущ портфейл</span><strong class="money">${fmtEuro(data.current_total)}</strong></div>
+            <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(data.low_4y)}</strong></div>
+            <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(data.base_4y)}</strong></div>
+            <div class="metric"><span>4Y High</span><strong class="money">${fmtEuro(data.high_4y)}</strong></div>
+          </div>
+        </section>
 
-      <section class="card">
-        <h2>Бързи действия</h2>
-        <div class="quick-grid">
-          <button class="quick-btn" id="quickHoldings"><strong>Активи</strong>Редактирай количества</button>
-          <button class="quick-btn" id="quickHorizons"><strong>Хоризонти</strong>Преглед на прогнози low/base/high</button>
-          <button class="quick-btn" id="quickSettings"><strong>Настройки</strong>Backend URL, Portfolio ID, визуализация</button>
-        </div>
-      </section>
-    `;
+        <section class="card">
+          <h2>Бързи действия</h2>
+          <div class="quick-grid">
+            <button class="quick-btn" id="quickHoldings"><strong>Активи</strong>Редактирай количества</button>
+            <button class="quick-btn" id="quickHorizons"><strong>Хоризонти</strong>Преглед на прогнози low/base/high</button>
+            <button class="quick-btn" id="quickSettings"><strong>Настройки</strong>Backend URL, Portfolio ID, визуализация</button>
+          </div>
+        </section>
+      `;
+    }
 
     updateDashboardQuickActions();
     applyMoneyHidden();
     setStatus('Dashboard е зареден успешно.');
   } catch (e) {
-    dashboardView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
-    setStatus('Backend е бавен или спи. Можеш да ползваш Опресни след малко.');
+    if (dashboardView) {
+      dashboardView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
+    }
+    setStatus('Backend е бавен или спи. Натисни Опресни след малко.');
+    throw e;
   }
 }
 
@@ -387,7 +402,9 @@ function bindHoldingActions(rows) {
         setStatus(`Записване на количество за ${row.product_name}...`);
         await patchQuantity(row.id, input.value);
         await Promise.all([loadDashboard(), loadHoldings()]);
-        if (activeScreen === 'horizons') await loadHorizons();
+        if (activeScreen === 'horizons') {
+          await loadHorizons();
+        }
         setStatus(`Количеството за ${row.product_name} е записано успешно.`);
       } catch (e) {
         setStatus(`Грешка при запис за ${row.product_name}: ${e.message}`);
@@ -400,8 +417,8 @@ function bindHoldingActions(rows) {
 
 async function loadHoldings() {
   setActiveNav('holdings');
-  dashboardView.classList.add('hidden');
-  contentView.classList.remove('hidden');
+  if (dashboardView) dashboardView.classList.add('hidden');
+  if (contentView) contentView.classList.remove('hidden');
   setStatus('Зареждане на активи...');
 
   try {
@@ -417,72 +434,74 @@ async function loadHoldings() {
     const amundiItems = Array.isArray(amundiData?.items) ? amundiData.items : [];
     const prevCache = getPriceCache();
 
-    contentView.innerHTML = `
-      <section class="card">
-        <h2>Активи</h2>
-        <p class="note">
-          Металите се въвеждат в <strong>грамове</strong>, а backend-ът автоматично изчислява стойността по цена в <strong>EUR/TROY_OUNCE</strong>.
-          За onemarket и Amundi фондовете се използват актуалните NAV цени от backend-а.
-        </p>
+    if (contentView) {
+      contentView.innerHTML = `
+        <section class="card">
+          <h2>Активи</h2>
+          <p class="note">
+            Металите се въвеждат в <strong>грамове</strong>, а backend-ът автоматично изчислява стойността по цена в <strong>EUR/TROY_OUNCE</strong>.
+            За onemarket и Amundi фондовете се използват актуалните NAV цени от backend-а.
+          </p>
 
-        <div class="table-wrap">
-          <div class="row head-row">
-            <div>Продукт</div>
-            <div>Количество</div>
-            <div>Цена</div>
-            <div>Промяна</div>
-            <div>Стойност</div>
-          </div>
+          <div class="table-wrap">
+            <div class="row head-row">
+              <div>Продукт</div>
+              <div>Количество</div>
+              <div>Цена</div>
+              <div>Промяна</div>
+              <div>Стойност</div>
+            </div>
 
-          ${rows
-            .map((r) => {
-              const prev = prevCache[r.product_id];
-              const om = findOnemarketMatch(r, onemarketItems);
-              const am = findAmundiMatch(r, amundiItems);
-              const ext = om || am;
+            ${rows
+              .map((r) => {
+                const prev = prevCache[r.product_id];
+                const om = findOnemarketMatch(r, onemarketItems);
+                const am = findAmundiMatch(r, amundiItems);
+                const ext = om || am;
 
-              const displayPrice = getDisplayPrice(r, ext);
-              const displayValue = getDisplayValue(r, ext);
-              const displayUnit = ext?.currency || r.current_price_unit;
-              const changeHtml = ext ? fundBadge(ext) : diffBadge(displayPrice, prev);
-              const sourceDate = ext?.lastUpdated
-                ? `<span class="unit-muted">NAV: ${ext.lastUpdated}</span>`
-                : '';
+                const displayPrice = getDisplayPrice(r, ext);
+                const displayValue = getDisplayValue(r, ext);
+                const displayUnit = ext?.currency || r.current_price_unit;
+                const changeHtml = ext ? fundBadge(ext) : diffBadge(displayPrice, prev);
+                const sourceDate = ext?.lastUpdated
+                  ? `<span class="unit-muted">NAV: ${ext.lastUpdated}</span>`
+                  : '';
 
-              return `
-                <div class="row">
-                  <div>
-                    <strong>${r.product_name}</strong>
-                    <span class="unit-muted mono">${r.product_id}</span>
-                  </div>
+                return `
+                  <div class="row">
+                    <div>
+                      <strong>${r.product_name}</strong>
+                      <span class="unit-muted mono">${r.product_id}</span>
+                    </div>
 
-                  <div>
-                    <input id="qty-${r.id}" class="qty-inline" type="number" step="0.00000001" value="${r.quantity_input}" />
-                    <span class="unit-muted">${r.quantity_input_unit}</span>
-                    <div class="inline-actions">
-                      <button id="save-${r.id}" class="secondary-btn small-btn">Запази</button>
+                    <div>
+                      <input id="qty-${r.id}" class="qty-inline" type="number" step="0.00000001" value="${r.quantity_input}" />
+                      <span class="unit-muted">${r.quantity_input_unit}</span>
+                      <div class="inline-actions">
+                        <button id="save-${r.id}" class="secondary-btn small-btn">Запази</button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <strong>${fmtNum(displayPrice, 2)}</strong>
+                      <span class="unit-muted">${displayUnit}</span>
+                      ${sourceDate}
+                    </div>
+
+                    <div>${changeHtml}</div>
+
+                    <div>
+                      <strong class="money">${fmtEuro(displayValue)}</strong>
+                      <span class="unit-muted">${r.currency}</span>
                     </div>
                   </div>
-
-                  <div>
-                    <strong>${fmtNum(displayPrice, 2)}</strong>
-                    <span class="unit-muted">${displayUnit}</span>
-                    ${sourceDate}
-                  </div>
-
-                  <div>${changeHtml}</div>
-
-                  <div>
-                    <strong class="money">${fmtEuro(displayValue)}</strong>
-                    <span class="unit-muted">${r.currency}</span>
-                  </div>
-                </div>
-              `;
-            })
-            .join('')}
-        </div>
-      </section>
-    `;
+                `;
+              })
+              .join('')}
+          </div>
+        </section>
+      `;
+    }
 
     const newCache = { ...prevCache };
     rows.forEach((r) => {
@@ -503,15 +522,18 @@ async function loadHoldings() {
       setStatus('Активите са заредени успешно. Няма външни фондови NAV данни.');
     }
   } catch (e) {
-    contentView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
-    setStatus('Грешка при holdings.');
+    if (contentView) {
+      contentView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
+    }
+    setStatus(`Грешка при holdings: ${e.message}`);
+    throw e;
   }
 }
 
 async function loadHorizons() {
   setActiveNav('horizons');
-  dashboardView.classList.add('hidden');
-  contentView.classList.remove('hidden');
+  if (dashboardView) dashboardView.classList.add('hidden');
+  if (contentView) contentView.classList.remove('hidden');
   setStatus('Зареждане на прогноза...');
 
   try {
@@ -539,148 +561,193 @@ async function loadHorizons() {
       ['high', 'Оптимистичен']
     ];
 
-    contentView.innerHTML = `
-      <section class="card">
-        <h2>Хоризонти</h2>
-        <p class="note">След смяна на количества натисни <strong>Опресни</strong> или мини пак през Хоризонти.</p>
+    if (contentView) {
+      contentView.innerHTML = `
+        <section class="card">
+          <h2>Хоризонти</h2>
+          <p class="note">След смяна на количества натисни <strong>Опресни</strong> или мини пак през Хоризонти.</p>
 
-        <div class="tabs">
-          ${horizons
-            .map(
-              ([k, l]) =>
-                `<button class="tab ${k === selectedHorizon ? 'active' : ''}" data-h="${k}">${l}</button>`
-            )
-            .join('')}
-        </div>
-
-        <div class="tabs">
-          ${scenarios
-            .map(
-              ([k, l]) =>
-                `<button class="tab ${k === selectedScenario ? 'active' : ''}" data-s="${k}">${l}</button>`
-            )
-            .join('')}
-        </div>
-
-        <div class="grid grid-2">
-          <div class="metric"><span>Хоризонт</span><strong>${data.horizon}</strong></div>
-          <div class="metric"><span>Сценарий</span><strong>${data.scenario}</strong></div>
-        </div>
-
-        <div class="metric" style="margin-top:12px">
-          <span>Обща стойност</span>
-          <strong class="money">${fmtEuro(data.total_value)}</strong>
-        </div>
-
-        <div class="table-wrap" style="margin-top:12px">
-          <div class="row head-row">
-            <div>Продукт</div>
-            <div></div>
-            <div></div>
-            <div></div>
-            <div>Projected Value</div>
+          <div class="tabs">
+            ${horizons
+              .map(
+                ([k, l]) =>
+                  `<button class="tab ${k === selectedHorizon ? 'active' : ''}" data-h="${k}">${l}</button>`
+              )
+              .join('')}
           </div>
 
-          ${data.lines
-            .map(
-              (line) => `
-                <div class="row">
-                  <div><strong>${line.product_name}</strong></div>
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                  <div><strong class="money">${fmtEuro(line.projected_value)}</strong></div>
-                </div>
-              `
-            )
-            .join('')}
-        </div>
-      </section>
-    `;
+          <div class="tabs">
+            ${scenarios
+              .map(
+                ([k, l]) =>
+                  `<button class="tab ${k === selectedScenario ? 'active' : ''}" data-s="${k}">${l}</button>`
+              )
+              .join('')}
+          </div>
 
-    contentView.querySelectorAll('[data-h]').forEach((btn) =>
-      btn.addEventListener('click', () => {
-        selectedHorizon = btn.dataset.h;
-        loadHorizons();
-      })
-    );
+          <div class="grid grid-2">
+            <div class="metric"><span>Хоризонт</span><strong>${data.horizon}</strong></div>
+            <div class="metric"><span>Сценарий</span><strong>${data.scenario}</strong></div>
+          </div>
 
-    contentView.querySelectorAll('[data-s]').forEach((btn) =>
-      btn.addEventListener('click', () => {
-        selectedScenario = btn.dataset.s;
-        loadHorizons();
-      })
-    );
+          <div class="metric" style="margin-top:12px">
+            <span>Обща стойност</span>
+            <strong class="money">${fmtEuro(data.total_value)}</strong>
+          </div>
+
+          <div class="table-wrap" style="margin-top:12px">
+            <div class="row head-row">
+              <div>Продукт</div>
+              <div></div>
+              <div></div>
+              <div></div>
+              <div>Projected Value</div>
+            </div>
+
+            ${data.lines
+              .map(
+                (line) => `
+                  <div class="row">
+                    <div><strong>${line.product_name}</strong></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div><strong class="money">${fmtEuro(line.projected_value)}</strong></div>
+                  </div>
+                `
+              )
+              .join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    if (contentView) {
+      contentView.querySelectorAll('[data-h]').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          selectedHorizon = btn.dataset.h;
+          loadHorizons();
+        })
+      );
+
+      contentView.querySelectorAll('[data-s]').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          selectedScenario = btn.dataset.s;
+          loadHorizons();
+        })
+      );
+    }
 
     applyMoneyHidden();
     setStatus('Прогнозата е заредена успешно.');
   } catch (e) {
-    contentView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
-    setStatus('Грешка при forecasts.');
+    if (contentView) {
+      contentView.innerHTML = `<section class="card"><h2>Грешка</h2><pre>${e.message}</pre></section>`;
+    }
+    setStatus(`Грешка при forecasts: ${e.message}`);
+    throw e;
   }
 }
 
 function openSettings() {
   const s = getSettings();
-  backendUrlInput.value = s.backendUrl || '';
-  portfolioIdInput.value = s.portfolioId || '';
+  if (backendUrlInput) backendUrlInput.value = s.backendUrl || '';
+  if (portfolioIdInput) portfolioIdInput.value = s.portfolioId || '';
   showModal();
 }
 
-reloadBtn.addEventListener('click', async () => {
-  reloadBtn.disabled = true;
-  setStatus('Опресняване...');
+async function refreshCurrentScreen() {
+  if (isRefreshing) {
+    setStatus('Опресняване вече е в процес...');
+    return;
+  }
+
+  isRefreshing = true;
+  const originalText = reloadBtn ? reloadBtn.textContent : 'Опресни';
+
+  if (reloadBtn) {
+    reloadBtn.disabled = true;
+    reloadBtn.textContent = 'Опресняване...';
+    reloadBtn.classList.add('loading');
+  }
 
   try {
     if (activeScreen === 'holdings') {
       await loadHoldings();
-      return;
-    }
-
-    if (activeScreen === 'horizons') {
+    } else if (activeScreen === 'horizons') {
       await loadHorizons();
-      return;
+    } else {
+      await loadDashboard();
     }
-
-    await loadDashboard();
+  } catch (e) {
+    setStatus(`Грешка при опресняване: ${e.message}`);
   } finally {
-    reloadBtn.disabled = false;
+    isRefreshing = false;
+
+    if (reloadBtn) {
+      reloadBtn.disabled = false;
+      reloadBtn.textContent = originalText;
+      reloadBtn.classList.remove('loading');
+    }
   }
-});
+}
 
-toggleMoneyBtn.addEventListener('click', () => {
-  moneyHidden = !moneyHidden;
-  localStorage.setItem(MONEY_HIDDEN_KEY, moneyHidden ? '1' : '0');
-  applyMoneyHidden();
-});
+if (reloadBtn) {
+  reloadBtn.addEventListener('click', refreshCurrentScreen);
+}
 
-settingsBtn.addEventListener('click', openSettings);
-closeSettingsBtn.addEventListener('click', hideModal);
+if (toggleMoneyBtn) {
+  toggleMoneyBtn.addEventListener('click', () => {
+    moneyHidden = !moneyHidden;
+    localStorage.setItem(MONEY_HIDDEN_KEY, moneyHidden ? '1' : '0');
+    applyMoneyHidden();
+  });
+}
 
-saveSettingsBtn.addEventListener('click', async () => {
-  const data = {
-    backendUrl: backendUrlInput.value.trim(),
-    portfolioId: portfolioIdInput.value.trim()
-  };
+if (settingsBtn) settingsBtn.addEventListener('click', openSettings);
+if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', hideModal);
 
-  saveSettings(data);
-  hideModal();
-  setStatus('Настройките са записани. Зареждане...');
+if (saveSettingsBtn) {
+  saveSettingsBtn.addEventListener('click', async () => {
+    const data = {
+      backendUrl: backendUrlInput ? backendUrlInput.value.trim() : DEFAULT_SETTINGS.backendUrl,
+      portfolioId: portfolioIdInput ? portfolioIdInput.value.trim() : DEFAULT_SETTINGS.portfolioId
+    };
 
-  await loadDashboard();
-});
+    saveSettings(data);
+    hideModal();
 
-navDashboard.addEventListener('click', loadDashboard);
-navHoldings.addEventListener('click', loadHoldings);
-navHorizons.addEventListener('click', loadHorizons);
+    if (reloadBtn) reloadBtn.disabled = false;
+    setStatus('Настройките са записани. Зареждане...');
+
+    try {
+      await loadDashboard();
+    } catch (e) {
+      setStatus(`Backend е недостъпен. Натисни Опресни. ${e.message}`);
+    }
+  });
+}
+
+if (navDashboard) navDashboard.addEventListener('click', () => loadDashboard().catch(() => {}));
+if (navHoldings) navHoldings.addEventListener('click', () => loadHoldings().catch(() => {}));
+if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catch(() => {}));
 
 (function init() {
   hideModal();
   applyMoneyHidden();
-  setStatus('Свързване с backend...');
 
-  // Не блокирай UI при стартиране
-  loadDashboard().catch(() => {
-    setStatus('Backend е недостъпен в момента. Можеш да натиснеш Опресни.');
-  });
+  if (reloadBtn) {
+    reloadBtn.disabled = false;
+    reloadBtn.textContent = 'Опресни';
+    reloadBtn.classList.remove('loading');
+  }
+
+  setStatus('Готово. Зареждане на dashboard...');
+
+  setTimeout(() => {
+    loadDashboard().catch((e) => {
+      setStatus(`Backend е недостъпен в момента. Натисни Опресни. ${e.message || ''}`.trim());
+      if (reloadBtn) reloadBtn.disabled = false;
+    });
+  }, 0);
 })();
