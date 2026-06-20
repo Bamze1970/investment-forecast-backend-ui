@@ -1,5 +1,23 @@
-const CACHE='investment-forecast-backend-connected-v6';
-const ASSETS=['./','./index.html','./styles.css?v=6','./app.js?v=6','./manifest.webmanifest','./icon.svg'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))); self.skipWaiting(); });
-self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
-self.addEventListener('fetch', e => { e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))); });
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    fetch(event.request, { cache: 'no-store' }).catch(() => {
+      return new Response('Offline', {
+        status: 503,
+        statusText: 'Offline'
+      });
+    })
+  );
+});
