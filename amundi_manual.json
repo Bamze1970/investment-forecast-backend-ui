@@ -1,0 +1,41 @@
+[
+  {
+    "id": "amundi_asia_equity_focus_nav_eur",
+    "name": "AMUNDI FUNDS ASIA EQUITY FOCUS - A EUR (C)",
+    "isin": "LU0557854147",
+    "price": 281.13,
+    "currency": "EUR",
+    "changePercent": null,
+    "changeValue": null,
+    "direction": "flat",
+    "lastUpdated": "2026-06-19",
+    "url": "https://www.amundi.bg/retail/product/view/LU0557854147",
+    "source": "manual"
+  },
+  {
+    "id": "amundi_china_equity_nav_eur",
+    "name": "AMUNDI FUNDS CHINA EQUITY - A EUR (C)",
+    "isin": "LU1824455569",
+    "price": 13.75,
+    "currency": "EUR",
+    "changePercent": null,
+    "changeValue": null,
+    "direction": "down",
+    "lastUpdated": "2026-06-18",
+    "url": "https://www.amundi.bg/retail/product/view/LU1824455569",
+    "source": "manual"
+  },
+  {
+    "id": "amundi_us_pioneer_nav_eur",
+    "name": "AMUNDI FUNDS US PIONEER FUND - A EUR (C)",
+    "isin": "LU1883872332",
+    "price": 29.23,
+    "currency": "EUR",
+    "changePercent": null,
+    "changeValue": null,
+    "direction": "flat",
+    "lastUpdated": "2026-06-18",
+    "url": "https://www.amundi.bg/retail/product/view/LU1883872332",
+    "source": "manual"
+  }
+]
