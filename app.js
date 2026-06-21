@@ -1,4 +1,3 @@
-
 const SETTINGS_KEY = 'inv-backend-settings-v7';
 const PRICE_CACHE_KEY = 'inv-price-cache-v7';
 const MONEY_HIDDEN_KEY = 'inv-money-hidden-v7';
@@ -47,7 +46,7 @@ function normalizeText(value) {
   return String(value || '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '');
 }
 
@@ -121,7 +120,10 @@ function sourceBadge(item) {
   const source = String(item?.source || '').toLowerCase();
   const itemId = String(item?.id || '').toLowerCase();
 
-  if (source === 'manual') return '<span class="source-badge manual">manual</span>';
+  if (source === 'manual') {
+    return '<span class="source-badge manual">manual</span>';
+  }
+
   if (
     source === 'live' ||
     source === 'live-fallback' ||
@@ -343,6 +345,24 @@ async function api(path, options = {}) {
   return res.json();
 }
 
+async function loadAmundiManual() {
+  const res = await fetchWithTimeout(
+    `./amundi_manual.json?_ts=${Date.now()}`,
+    {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' }
+    },
+    8000
+  );
+
+  if (!res.ok) {
+    throw new Error(`Не успях да заредя amundi_manual.json (${res.status})`);
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
 function updateDashboardQuickActions() {
   const qh = document.getElementById('quickHoldings');
   if (qh) qh.addEventListener('click', () => loadHoldings().catch(() => {}));
@@ -466,15 +486,14 @@ async function loadHoldings() {
   try {
     const s = getSettings();
 
-    const [rows, onemarketData, amundiData, marketAssetsData] = await Promise.all([
+    const [rows, onemarketData, amundiItems, marketAssetsData] = await Promise.all([
       api(`/api/portfolios/${encodeURIComponent(s.portfolioId)}/holdings`),
       api('/api/onemarket').catch(() => ({ items: [] })),
-      api('/api/amundi').catch(() => ({ items: [] })),
+      loadAmundiManual().catch(() => []),
       api('/api/market-assets').catch(() => ({ items: [] }))
     ]);
 
     const onemarketItems = Array.isArray(onemarketData?.items) ? onemarketData.items : [];
-    const amundiItems = Array.isArray(amundiData?.items) ? amundiData.items : [];
     const marketItems = Array.isArray(marketAssetsData?.items) ? marketAssetsData.items : [];
     const prevCache = getPriceCache();
 
@@ -482,7 +501,7 @@ async function loadHoldings() {
       contentView.innerHTML = `
         <section class="card">
           <h2>Активи</h2>
-          <p class="note">Onemarkets, Amundi и market-assets идват от backend-a.</p>
+          <p class="note">Onemarkets идват от backend-а, Amundi идва от <strong>amundi_manual.json</strong>, а Gold / Silver / Solana идват от <strong>/api/market-assets</strong>.</p>
 
           <div class="table-wrap">
             <div class="row head-row">
@@ -721,7 +740,7 @@ async function refreshCurrentScreen() {
       await loadDashboard();
     }
   } catch (e) {
-    setStatus(`Грешка при опресняване: ${e.message}`);
+    setStatus(`Грешка при opресняване: ${e.message}`);
   } finally {
     isRefreshing = false;
     if (reloadBtn) {
