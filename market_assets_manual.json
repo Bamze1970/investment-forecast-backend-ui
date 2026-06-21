@@ -28,10 +28,10 @@
   {
     "id": "market_solana_spot_eur",
     "name": "Solana",
-    "price": 64.38,
+    "price": 63.75,
     "currency": "EUR",
     "unit": "EUR/SOL",
-    "changePercent": 6.54,
+    "changePercent": 5.15,
     "changeValue": null,
     "direction": "up",
     "lastUpdated": null,
