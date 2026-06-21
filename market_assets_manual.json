@@ -2,28 +2,28 @@
   {
     "id": "market_gold_spot_eur_oz",
     "name": "Gold",
-    "price": 3876.77,
+    "price": 3623.69,
     "currency": "EUR",
     "unit": "EUR/TROY_OUNCE",
-    "changePercent": 0.00,
-    "changeValue": null,
-    "direction": "flat",
-    "lastUpdated": "2026-06-20",
+    "changePercent": -1.37,
+    "changeValue": -50.22,
+    "direction": "down",
+    "lastUpdated": null,
     "source": "manual",
-    "url": null
+    "url": "https://tavex.bg/grafika-tseni-zlato-srebro/#tab-chart-gold"
   },
   {
     "id": "market_silver_spot_eur_oz",
     "name": "Silver",
-    "price": 57.95,
+    "price": 56.75,
     "currency": "EUR",
     "unit": "EUR/TROY_OUNCE",
-    "changePercent": 0.00,
-    "changeValue": null,
-    "direction": "flat",
-    "lastUpdated": "2026-06-20",
+    "changePercent": -1.04,
+    "changeValue": -0.60,
+    "direction": "down",
+    "lastUpdated": null,
     "source": "manual",
-    "url": null
+    "url": "https://tavex.bg/grafika-tseni-zlato-srebro/#tab-chart-silver"
   },
   {
     "id": "market_solana_spot_eur",
@@ -34,7 +34,7 @@
     "changePercent": 6.54,
     "changeValue": null,
     "direction": "up",
-    "lastUpdated": "2026-06-20",
+    "lastUpdated": null,
     "source": "manual",
     "url": "https://www.binance.com/en/trade/SOL_EUR?type=spot"
   }
