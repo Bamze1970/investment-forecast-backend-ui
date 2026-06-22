@@ -376,29 +376,3 @@ input[type="number"] {
     grid-template-columns: 1fr;
   }
 }
-@media (orientation: landscape) {
-
-  .card,
-  .holding,
-  .asset,
-  .item {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    gap: 16px !important;
-  }
-
-  .card > * {
-    margin: 0 !important;
-  }
-
-  input {
-    width: 100px !important;
-  }
-
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-}
