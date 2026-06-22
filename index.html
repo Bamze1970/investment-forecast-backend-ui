@@ -5,70 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a" />
   <title>Investment Forecast</title>
-  manifest.webmanifest
-  icon.svg
-  styles.css?v=7
-
-  <style>
-    /* =========================================
-       LANDSCAPE OVERRIDES: phone in horizontal mode
-       Цел: в landscape телефонът да показва по-широк,
-       desktop-подобен layout, без да пипаме app.js.
-       ========================================= */
-    @media screen and (orientation: landscape) and (max-width: 1100px) {
-      html, body {
-        overflow-x: hidden;
-      }
-
-      .topbar {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 20px;
-      }
-
-      .header-actions {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 12px;
-        flex-shrink: 0;
-      }
-
-      .container {
-        max-width: 1280px;
-      }
-
-      /* Ако cards/редовете имат такива класове в existing CSS/JS */
-      .card,
-      .asset-card,
-      .fund-card,
-      .holding-card,
-      .holding-row,
-      .asset-row,
-      .position-card,
-      .product-card {
-        width: 100%;
-      }
-
-      /* По-широко съдържание в landscape */
-      #dashboardView,
-      #contentView {
-        width: 100%;
-      }
-
-      /* Bottom nav да не изяжда излишно място */
-      .bottom-nav {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
-      }
-
-      .bottom-nav .nav-btn {
-        min-width: 0;
-      }
-    }
-  </style>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
   <header class="topbar">
