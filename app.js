@@ -372,7 +372,7 @@ async function loadDashboard() {
           <h2>Dashboard</h2>
           <p class="note">Портфейл: <strong>${s.portfolioId}</strong></p>
           <div class="grid grid-4">
-            <div class="metric"><span>Текущ портфейл</span><strong class="money">${fmtEuro(data.current_total)}</strong></div>
+            <div class="metric"><span>Текущ портфейл</span><strong class="money">Проверка...</strong></div>
             <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(data.low_4y)}</strong></div>
             <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(data.base_4y)}</strong></div>
             <div class="metric"><span>4Y High</span><strong class="money">${fmtEuro(data.high_4y)}</strong></div>
