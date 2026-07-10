@@ -606,15 +606,6 @@ if (Number.isFinite(liveChangePercent) && Math.abs(liveChangePercent) >= 0.0001)
   changeHtml = diffBadge(displayPrice, effectivePreviousPrice);
 }
 
-const hasLiveChangePercent =
-  ext &&
-  Number.isFinite(Number(ext.changePercent)) &&
-  Math.abs(Number(ext.changePercent)) >= 0.0001;
-
-const changeHtml = hasLiveChangePercent
-  ? fundBadge(ext)
-  : diffBadge(displayPrice, prev);
-
                 return `
                   <div class="row fund-row">
                     <div>
