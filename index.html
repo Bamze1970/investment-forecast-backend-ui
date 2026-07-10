@@ -7,7 +7,7 @@
   <title>Investment Forecast</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=8" />
+  ./styles.css?v=20
 </head>
 <body>
   <header class="topbar">
@@ -22,7 +22,7 @@
     </div>
   </header>
 
-  <div id="statusBar" class="status-bar">Зареждане…</div>
+  <div id="statusBar" class="status-bar">Зареждане...</div>
 
   <main class="container">
     <section id="dashboardView"></section>
@@ -33,10 +33,13 @@
     <div class="modal-card">
       <h2>Настройки</h2>
       <p class="note">Задай backend URL и Portfolio ID.</p>
+
       <label for="backendUrlInput">Backend URL</label>
       <input id="backendUrlInput" type="text" placeholder="например https://your-backend.example.com" />
+
       <label for="portfolioIdInput">Portfolio ID</label>
       <input id="portfolioIdInput" type="text" placeholder="например portfolio-boris-main" />
+
       <div class="modal-actions">
         <button id="saveSettingsBtn" class="primary">Запази</button>
         <button id="closeSettingsBtn" class="secondary-btn">Затвори</button>
@@ -50,6 +53,6 @@
     <button id="navHorizons" class="nav-btn">Хоризонти</button>
   </nav>
 
-  <script type="module" src="app.js?v=13"</script>
+  ./app.js?v=20script>
 </body>
 </html>
