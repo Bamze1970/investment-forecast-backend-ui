@@ -385,10 +385,8 @@ async function loadDashboard() {
     const amundiLiveItems = Array.isArray(amundiData?.items) ? amundiData.items : [];
     const amundiManual = Array.isArray(amundiManualItems) ? amundiManualItems : [];
     const marketItems = Array.isArray(marketAssetsData?.items) ? marketAssetsData.items : [];
-    const prevCache = getPriceCache();
 
     let currentPortfolioTotal = 0;
-    let previousPortfolioTotal = 0;
 
     rows.forEach((r) => {
       const om = findOnemarketMatch(r, onemarketItems);
@@ -398,29 +396,8 @@ async function loadDashboard() {
       const ma = findMarketAssetMatch(r, marketItems);
       const ext = om || am || ma;
 
-      const currentValue = getDisplayValue(r, ext);
-      currentPortfolioTotal += currentValue;
-
-      const previousPrice = Number(prevCache[r.product_id]);
-      const qty = Number(r.quantity_input);
-      const priceUnit = String(ext?.unit || r.current_price_unit || '').toUpperCase();
-      const qtyUnit = String(r.quantity_input_unit || '').toLowerCase();
-
-      if (Number.isFinite(previousPrice) && previousPrice > 0 && Number.isFinite(qty)) {
-        if (priceUnit.includes('TROY_OUNCE') && qtyUnit.includes('gram')) {
-          previousPortfolioTotal += (qty / TROY_OUNCE_IN_GRAMS) * previousPrice;
-        } else {
-          previousPortfolioTotal += qty * previousPrice;
-        }
-      } else {
-        previousPortfolioTotal += Number(r.current_value || currentValue || 0);
-      }
+      currentPortfolioTotal += getDisplayValue(r, ext);
     });
-
-    const currentPortfolioBadge = diffBadge(currentPortfolioTotal, previousPortfolioTotal);
-    const lowBadge = diffBadge(Number(dashboardData.low_4y || 0), currentPortfolioTotal);
-    const baseBadge = diffBadge(Number(dashboardData.base_4y || 0), currentPortfolioTotal);
-    const highBadge = diffBadge(Number(dashboardData.high_4y || 0), currentPortfolioTotal);
 
     if (dashboardView) {
       dashboardView.innerHTML = `
@@ -428,26 +405,10 @@ async function loadDashboard() {
           <h2>Dashboard</h2>
           <p class="note">Портфейл: <strong>${s.portfolioId}</strong></p>
           <div class="grid grid-4">
-            <div class="metric">
-              <span>Текущ портфейл</span>
-              <strong class="money">${fmtEuro(currentPortfolioTotal)}</strong>
-              <div style="margin-top:8px">${currentPortfolioBadge}</div>
-            </div>
-            <div class="metric">
-              <span>4Y Low</span>
-              <strong class="money">${fmtEuro(dashboardData.low_4y)}</strong>
-              <div style="margin-top:8px">${lowBadge}</div>
-            </div>
-            <div class="metric">
-              <span>4Y Base</span>
-              <strong class="money">${fmtEuro(dashboardData.base_4y)}</strong>
-              <div style="margin-top:8px">${baseBadge}</div>
-            </div>
-            <div class="metric">
-              <span>4Y High</span>
-              <strong class="money">${fmtEuro(dashboardData.high_4y)}</strong>
-              <div style="margin-top:8px">${highBadge}</div>
-            </div>
+            <div class="metric"><span>Текущ портфейл</span><strong class="money">${fmtEuro(currentPortfolioTotal)}</strong></div>
+            <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(dashboardData.low_4y)}</strong></div>
+            <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(dashboardData.base_4y)}</strong></div>
+            <div class="metric"><span>4Y High</span><strong class="money">${fmtEuro(dashboardData.high_4y)}</strong></div>
           </div>
         </section>
         <section class="card">
@@ -547,64 +508,14 @@ async function loadHoldings() {
                 const ma = findMarketAssetMatch(r, marketItems);
                 const ext = om || am || ma;
 
-               const displayPrice = getDisplayPrice(r, ext);
-const displayValue = getDisplayValue(r, ext);
-const displayUnit = ext?.unit || ext?.currency || r.current_price_unit;
-const sourceHtml = sourceBadge(ext);
-const sourceDate = ext?.lastUpdated
-  ? `<span class="unit-muted">Updated: ${ext.lastUpdated}</span>`
-  : '';
-
-const liveChangePercent =
-  Number(ext?.changePercent) ||
-  Number(ext?.change_percent) ||
-  Number(ext?.changePct) ||
-  Number(ext?.change_pct) ||
-  Number(ext?.percentChange) ||
-  Number(ext?.percent_change) ||
-  Number(ext?.priceChangePercent) ||
-  Number(ext?.price_change_percent);
-
-const livePreviousPrice =
-  Number(ext?.previousPrice) ||
-  Number(ext?.previous_price) ||
-  Number(ext?.previousClose) ||
-  Number(ext?.previous_close) ||
-  Number(ext?.previous) ||
-  Number(ext?.priorPrice) ||
-  Number(ext?.prior_price) ||
-  Number(ext?.lastClose) ||
-  Number(ext?.last_close) ||
-  Number(ext?.close);
-
-const liveChangeValue =
-  Number(ext?.changeValue) ||
-  Number(ext?.change_value) ||
-  Number(ext?.priceChange) ||
-  Number(ext?.price_change);
-
-const computedPreviousFromChangeValue =
-  Number.isFinite(liveChangeValue) && Math.abs(liveChangeValue) > 0.0000001
-    ? displayPrice - liveChangeValue
-    : null;
-
-const effectivePreviousPrice =
-  Number.isFinite(livePreviousPrice) && livePreviousPrice > 0
-    ? livePreviousPrice
-    : Number.isFinite(computedPreviousFromChangeValue) && computedPreviousFromChangeValue > 0
-      ? computedPreviousFromChangeValue
-      : Number(prev);
-
-let changeHtml = '';
-
-if (Number.isFinite(liveChangePercent) && Math.abs(liveChangePercent) >= 0.0001) {
-  changeHtml =
-    liveChangePercent > 0
-      ? `<span class="pill up">▲ +${fmtNum(Math.abs(liveChangePercent), 2)}%</span>`
-      : `<span class="pill down">▼ -${fmtNum(Math.abs(liveChangePercent), 2)}%</span>`;
-} else {
-  changeHtml = diffBadge(displayPrice, effectivePreviousPrice);
-}
+                const displayPrice = getDisplayPrice(r, ext);
+                const displayValue = getDisplayValue(r, ext);
+                const displayUnit = ext?.unit || ext?.currency || r.current_price_unit;
+                const changeHtml = ext ? fundBadge(ext) : diffBadge(displayPrice, prev);
+                const sourceHtml = sourceBadge(ext);
+                const sourceDate = ext?.lastUpdated
+                  ? `<span class="unit-muted">Updated: ${ext.lastUpdated}</span>`
+                  : '';
 
                 return `
                   <div class="row fund-row">
@@ -785,12 +696,7 @@ if (saveSettingsBtn) {
   });
 }
 
-if (navDashboard) {
-  navDashboard.addEventListener('click', () => {
-    loadDashboard().catch(() => renderInitialDashboard());
-  });
-}
-
+if (navDashboard) navDashboard.addEventListener('click', renderInitialDashboard);
 if (navHoldings) navHoldings.addEventListener('click', () => loadHoldings().catch(() => {}));
 if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catch(() => {}));
 
@@ -804,13 +710,6 @@ if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catc
     reloadBtn.classList.remove('loading');
   }
 
-  renderInitialDashboard();
   setStatus('Зареждане на Dashboard...');
-
-  setTimeout(() => {
-    loadDashboard().catch(() => {
-      renderInitialDashboard();
-      setStatus('Dashboard не се зареди. Натисни Опресни или отвори Активи.');
-    });
-  }, 0);
+  loadDashboard().catch(() => renderInitialDashboard());
 })();
