@@ -711,4 +711,5 @@ if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catc
   }
 
   setStatus('Готово. Избери екран отдолу или натисни Опресни.');
-renderInitialDashboard();
+  renderInitialDashboard();
+})();
