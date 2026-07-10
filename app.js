@@ -711,5 +711,7 @@ if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catc
   }
 
   setStatus('Зареждане на Dashboard...');
-  loadDashboard().catch(() => renderInitialDashboard());
-})();
+  loadDashboard().catch((e) => {
+  alert('Dashboard error: ' + e.message);
+  renderInitialDashboard();
+});
