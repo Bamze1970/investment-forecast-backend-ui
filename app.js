@@ -696,7 +696,12 @@ if (saveSettingsBtn) {
   });
 }
 
-if (navDashboard) navDashboard.addEventListener('click', renderInitialDashboard);
+if (navDashboard) {
+  navDashboard.addEventListener('click', () => {
+    loadDashboard().catch(() => renderInitialDashboard());
+  });
+}
+
 if (navHoldings) navHoldings.addEventListener('click', () => loadHoldings().catch(() => {}));
 if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catch(() => {}));
 
@@ -710,6 +715,13 @@ if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catc
     reloadBtn.classList.remove('loading');
   }
 
-  setStatus('Готово. Избери екран отдолу или натисни Опресни.');
   renderInitialDashboard();
+  setStatus('Зареждане на Dashboard...');
+
+  setTimeout(() => {
+    loadDashboard().catch(() => {
+      renderInitialDashboard();
+      setStatus('Dashboard не се зареди. Натисни Опресни или отвори Активи.');
+    });
+  }, 0);
 })();
