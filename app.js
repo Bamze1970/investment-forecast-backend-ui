@@ -710,8 +710,5 @@ if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catc
     reloadBtn.classList.remove('loading');
   }
 
-  setStatus('Зареждане на Dashboard...');
-  loadDashboard().catch((e) => {
-  alert('Dashboard error: ' + e.message);
-  renderInitialDashboard();
-});
+  setStatus('Готово. Избери екран отдолу или натисни Опресни.');
+renderInitialDashboard();
