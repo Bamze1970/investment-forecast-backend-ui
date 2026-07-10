@@ -547,13 +547,64 @@ async function loadHoldings() {
                 const ma = findMarketAssetMatch(r, marketItems);
                 const ext = om || am || ma;
 
-                const displayPrice = getDisplayPrice(r, ext);
+               const displayPrice = getDisplayPrice(r, ext);
 const displayValue = getDisplayValue(r, ext);
 const displayUnit = ext?.unit || ext?.currency || r.current_price_unit;
 const sourceHtml = sourceBadge(ext);
 const sourceDate = ext?.lastUpdated
   ? `<span class="unit-muted">Updated: ${ext.lastUpdated}</span>`
   : '';
+
+const liveChangePercent =
+  Number(ext?.changePercent) ||
+  Number(ext?.change_percent) ||
+  Number(ext?.changePct) ||
+  Number(ext?.change_pct) ||
+  Number(ext?.percentChange) ||
+  Number(ext?.percent_change) ||
+  Number(ext?.priceChangePercent) ||
+  Number(ext?.price_change_percent);
+
+const livePreviousPrice =
+  Number(ext?.previousPrice) ||
+  Number(ext?.previous_price) ||
+  Number(ext?.previousClose) ||
+  Number(ext?.previous_close) ||
+  Number(ext?.previous) ||
+  Number(ext?.priorPrice) ||
+  Number(ext?.prior_price) ||
+  Number(ext?.lastClose) ||
+  Number(ext?.last_close) ||
+  Number(ext?.close);
+
+const liveChangeValue =
+  Number(ext?.changeValue) ||
+  Number(ext?.change_value) ||
+  Number(ext?.priceChange) ||
+  Number(ext?.price_change);
+
+const computedPreviousFromChangeValue =
+  Number.isFinite(liveChangeValue) && Math.abs(liveChangeValue) > 0.0000001
+    ? displayPrice - liveChangeValue
+    : null;
+
+const effectivePreviousPrice =
+  Number.isFinite(livePreviousPrice) && livePreviousPrice > 0
+    ? livePreviousPrice
+    : Number.isFinite(computedPreviousFromChangeValue) && computedPreviousFromChangeValue > 0
+      ? computedPreviousFromChangeValue
+      : Number(prev);
+
+let changeHtml = '';
+
+if (Number.isFinite(liveChangePercent) && Math.abs(liveChangePercent) >= 0.0001) {
+  changeHtml =
+    liveChangePercent > 0
+      ? `<span class="pill up">▲ +${fmtNum(Math.abs(liveChangePercent), 2)}%</span>`
+      : `<span class="pill down">▼ -${fmtNum(Math.abs(liveChangePercent), 2)}%</span>`;
+} else {
+  changeHtml = diffBadge(displayPrice, effectivePreviousPrice);
+}
 
 const hasLiveChangePercent =
   ext &&
