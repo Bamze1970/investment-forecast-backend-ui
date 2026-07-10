@@ -548,13 +548,21 @@ async function loadHoldings() {
                 const ext = om || am || ma;
 
                 const displayPrice = getDisplayPrice(r, ext);
-                const displayValue = getDisplayValue(r, ext);
-                const displayUnit = ext?.unit || ext?.currency || r.current_price_unit;
-                const changeHtml = ext ? fundBadge(ext) : diffBadge(displayPrice, prev);
-                const sourceHtml = sourceBadge(ext);
-                const sourceDate = ext?.lastUpdated
-                  ? `<span class="unit-muted">Updated: ${ext.lastUpdated}</span>`
-                  : '';
+const displayValue = getDisplayValue(r, ext);
+const displayUnit = ext?.unit || ext?.currency || r.current_price_unit;
+const sourceHtml = sourceBadge(ext);
+const sourceDate = ext?.lastUpdated
+  ? `<span class="unit-muted">Updated: ${ext.lastUpdated}</span>`
+  : '';
+
+const hasLiveChangePercent =
+  ext &&
+  Number.isFinite(Number(ext.changePercent)) &&
+  Math.abs(Number(ext.changePercent)) >= 0.0001;
+
+const changeHtml = hasLiveChangePercent
+  ? fundBadge(ext)
+  : diffBadge(displayPrice, prev);
 
                 return `
                   <div class="row fund-row">
