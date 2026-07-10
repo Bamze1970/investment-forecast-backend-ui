@@ -364,40 +364,7 @@ async function loadDashboard() {
 
   try {
     const s = getSettings();
-
-    const [
-      dashboardData,
-      rows,
-      onemarketData,
-      amundiData,
-      amundiManualItems,
-      marketAssetsData
-    ] = await Promise.all([
-      api(`/api/portfolios/${encodeURIComponent(s.portfolioId)}/dashboard`),
-      api(`/api/portfolios/${encodeURIComponent(s.portfolioId)}/holdings`),
-      api('/api/onemarket').catch(() => ({ items: [] })),
-      api('/api/amundi').catch(() => ({ items: [] })),
-      loadAmundiManual().catch(() => []),
-      api('/api/market-assets').catch(() => ({ items: [] }))
-    ]);
-
-    const onemarketItems = Array.isArray(onemarketData?.items) ? onemarketData.items : [];
-    const amundiLiveItems = Array.isArray(amundiData?.items) ? amundiData.items : [];
-    const amundiManual = Array.isArray(amundiManualItems) ? amundiManualItems : [];
-    const marketItems = Array.isArray(marketAssetsData?.items) ? marketAssetsData.items : [];
-
-    let currentPortfolioTotal = 0;
-
-    rows.forEach((r) => {
-      const om = findOnemarketMatch(r, onemarketItems);
-      const amLive = findAmundiMatch(r, amundiLiveItems);
-      const amManual = findAmundiMatch(r, amundiManual);
-      const am = preferAmundi(amLive, amManual);
-      const ma = findMarketAssetMatch(r, marketItems);
-      const ext = om || am || ma;
-
-      currentPortfolioTotal += getDisplayValue(r, ext);
-    });
+    const data = await api(`/api/portfolios/${encodeURIComponent(s.portfolioId)}/dashboard`);
 
     if (dashboardView) {
       dashboardView.innerHTML = `
@@ -405,10 +372,10 @@ async function loadDashboard() {
           <h2>Dashboard</h2>
           <p class="note">Портфейл: <strong>${s.portfolioId}</strong></p>
           <div class="grid grid-4">
-            <div class="metric"><span>Текущ портфейл</span><strong class="money">${fmtEuro(currentPortfolioTotal)}</strong></div>
-            <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(dashboardData.low_4y)}</strong></div>
-            <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(dashboardData.base_4y)}</strong></div>
-            <div class="metric"><span>4Y High</span><strong class="money">${fmtEuro(dashboardData.high_4y)}</strong></div>
+            <div class="metric"><span>Текущ портфейл</span><strong class="money">${fmtEuro(data.current_total)}</strong></div>
+            <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(data.low_4y)}</strong></div>
+            <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(data.base_4y)}</strong></div>
+            <div class="metric"><span>4Y High</span><strong class="money">${fmtEuro(data.high_4y)}</strong></div>
           </div>
         </section>
         <section class="card">
@@ -511,11 +478,7 @@ async function loadHoldings() {
                 const displayPrice = getDisplayPrice(r, ext);
                 const displayValue = getDisplayValue(r, ext);
                 const displayUnit = ext?.unit || ext?.currency || r.current_price_unit;
-                const extChangePercent = Number(ext?.changePercent);
-                const changeHtml =
-                  ext && Number.isFinite(extChangePercent) && Math.abs(extChangePercent) >= 0.0001
-                    ? fundBadge(ext)
-                    : diffBadge(displayPrice, prev);
+                const changeHtml = ext ? fundBadge(ext) : diffBadge(displayPrice, prev);
                 const sourceHtml = sourceBadge(ext);
                 const sourceDate = ext?.lastUpdated
                   ? `<span class="unit-muted">Updated: ${ext.lastUpdated}</span>`
