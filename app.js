@@ -682,12 +682,17 @@ if (saveSettingsBtn) {
     };
     saveSettings(data);
     hideModal();
-    setStatus('Настройките са записани.');
-    renderInitialDashboard();
+    setStatus('Настройките са записани. Зареждане на Dashboard...');
+    loadDashboard().catch(() => renderInitialDashboard());
   });
 }
 
-if (navDashboard) navDashboard.addEventListener('click', renderInitialDashboard);
+if (navDashboard) {
+  navDashboard.addEventListener('click', () => {
+    loadDashboard().catch(() => renderInitialDashboard());
+  });
+}
+
 if (navHoldings) navHoldings.addEventListener('click', () => loadHoldings().catch(() => {}));
 if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catch(() => {}));
 
@@ -701,6 +706,9 @@ if (navHorizons) navHorizons.addEventListener('click', () => loadHorizons().catc
     reloadBtn.classList.remove('loading');
   }
 
-  setStatus('Готово. Избери екран отдолу или натисни Опресни.');
-  renderInitialDashboard();
+  setStatus('Зареждане на Dashboard...');
+  loadDashboard().catch(() => {
+    renderInitialDashboard();
+    setStatus('Dashboard не се зареди. Натисни Опресни или отвори Активи.');
+  });
 })();
