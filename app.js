@@ -113,6 +113,49 @@ function getPriceCache() {
 function setPriceCache(data) {
   localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(data));
 }
+const PORTFOLIO_MONTHLY_CACHE_KEY = 'inv-portfolio-monthly-cache-v1';
+
+function getMonthKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function getPreviousMonthKey(date = new Date()) {
+  return getMonthKey(new Date(date.getFullYear(), date.getMonth() - 1, 1));
+}
+
+function getPortfolioMonthlyCache() {
+  try {
+    return JSON.parse(localStorage.getItem(PORTFOLIO_MONTHLY_CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function setPortfolioMonthlyCache(data) {
+  localStorage.setItem(PORTFOLIO_MONTHLY_CACHE_KEY, JSON.stringify(data));
+}
+
+function getPortfolioMonthlyBadge(portfolioId, currentTotal) {
+  const cache = getPortfolioMonthlyCache();
+  const id = String(portfolioId || 'default');
+  const currentMonthKey = getMonthKey();
+  const previousMonthKey = getPreviousMonthKey();
+
+  if (!cache[id]) cache[id] = {};
+
+  const previousTotal = Number(cache[id]?.[previousMonthKey]?.total);
+
+  cache[id][currentMonthKey] = {
+    total: Number(currentTotal || 0),
+    updatedAt: new Date().toISOString()
+  };
+
+  setPortfolioMonthlyCache(cache);
+
+  return diffBadge(Number(currentTotal || 0), previousTotal);
+}
 
 function sourceBadge(item) {
   if (!item) return '';
@@ -390,13 +433,20 @@ async function loadDashboard() {
       return total + getDisplayValue(r, ext);
     }, 0);
 
+    const portfolioMonthlyBadge = getPortfolioMonthlyBadge(s.portfolioId, currentPortfolioTotal);
+
     if (dashboardView) {
       dashboardView.innerHTML = `
         <section class="card">
           <h2>Dashboard</h2>
           <p class="note">Портфейл: <strong>${s.portfolioId}</strong></p>
           <div class="grid grid-4">
-            <div class="metric"><span>Текущ портфейл</span><strong class="money">${fmtEuro(currentPortfolioTotal)}</strong></div>
+                    <div class="metric">
+              <span>Текущ портфейл</span>
+              <strong class="money">${fmtEuro(currentPortfolioTotal)}</strong>
+              <div style="margin-top:8px">${portfolioMonthlyBadge}</div>
+              <span class="unit-muted">спрямо предходен месец</span>
+            </div>
             <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(dashboardData.low_4y)}</strong></div>
             <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(dashboardData.base_4y)}</strong></div>
             <div class="metric"><span>4Y High</span><strong class="money">${fmtEuro(dashboardData.high_4y)}</strong></div>
