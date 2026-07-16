@@ -155,7 +155,7 @@ function findHistoricalPortfolioTotal(history, targetDate) {
 }
 
 function cleanupPortfolioHistory(history) {
-  const minDate = addDays(new Date(), -420);
+  const minDate = addDays(new Date(), -1900);
   const minKey = getDateKey(minDate);
 
   Object.keys(history || {}).forEach((key) => {
@@ -184,7 +184,12 @@ function getPortfolioPeriodBadges(portfolioId, currentTotal) {
     ['1Q', addMonths(today, -3)],
     ['2Q', addMonths(today, -6)],
     ['3Q', addMonths(today, -9)],
-    ['4Q', addMonths(today, -12)]
+    ['4Q', addMonths(today, -12)],
+    ['1Y', addMonths(today, -12)],
+    ['2Y', addMonths(today, -24)],
+    ['3Y', addMonths(today, -36)],
+    ['4Y', addMonths(today, -48)],
+    ['5Y', addMonths(today, -60)]
   ];
 
   const badges = periods
