@@ -165,6 +165,27 @@ function cleanupPortfolioHistory(history) {
   return history;
 }
 
+function getPortfolioChangePill(currentTotal, previousTotal) {
+  const current = Number(currentTotal || 0);
+  const previous = Number(previousTotal);
+
+  if (!Number.isFinite(previous) || previous <= 0) {
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:rgba(148,163,184,0.14);color:#cbd5e1;border:1px solid rgba(148,163,184,0.28);font-weight:800;font-size:12px;white-space:nowrap;"><span style="font-size:14px;line-height:1;">•</span>0.00%</span>';
+  }
+
+  const diffPct = ((current - previous) / previous) * 100;
+
+  if (!Number.isFinite(diffPct) || Math.abs(diffPct) < 0.0001) {
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:rgba(148,163,184,0.14);color:#cbd5e1;border:1px solid rgba(148,163,184,0.28);font-weight:800;font-size:12px;white-space:nowrap;"><span style="font-size:14px;line-height:1;">•</span>0.00%</span>';
+  }
+
+  if (diffPct > 0) {
+    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:rgba(34,197,94,0.18);color:#4ade80;border:1px solid rgba(34,197,94,0.42);font-weight:900;font-size:12px;white-space:nowrap;"><span style="font-size:15px;line-height:1;">▲</span>+${fmtNum(Math.abs(diffPct), 2)}%</span>`;
+  }
+
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.42);font-weight:900;font-size:12px;white-space:nowrap;"><span style="font-size:15px;line-height:1;">▼</span>-${fmtNum(Math.abs(diffPct), 2)}%</span>`;
+}
+
 function getPortfolioPeriodBadges(portfolioId, currentTotal) {
   const cache = getPortfolioHistoryCache();
   const id = String(portfolioId || 'default');
@@ -175,30 +196,60 @@ function getPortfolioPeriodBadges(portfolioId, currentTotal) {
 
   const history = cache[id];
 
-  const periods = [
-    ['1W', addDays(today, -7)],
-    ['2W', addDays(today, -14)],
-    ['3W', addDays(today, -21)],
-    ['4W', addDays(today, -28)],
-    ['1M', addMonths(today, -1)],
-    ['1Q', addMonths(today, -3)],
-    ['2Q', addMonths(today, -6)],
-    ['3Q', addMonths(today, -9)],
-    ['4Q', addMonths(today, -12)],
-    ['1Y', addMonths(today, -12)],
-    ['2Y', addMonths(today, -24)],
-    ['3Y', addMonths(today, -36)],
-    ['4Y', addMonths(today, -48)],
-    ['5Y', addMonths(today, -60)]
+  const groups = [
+    {
+      title: 'Седмици',
+      periods: [
+        ['1с', addDays(today, -7)],
+        ['2с', addDays(today, -14)],
+        ['3с', addDays(today, -21)],
+        ['4с', addDays(today, -28)]
+      ]
+    },
+    {
+      title: 'Месец',
+      periods: [
+        ['1м', addMonths(today, -1)]
+      ]
+    },
+    {
+      title: 'Тримесечия',
+      periods: [
+        ['1т', addMonths(today, -3)],
+        ['2т', addMonths(today, -6)],
+        ['3т', addMonths(today, -9)],
+        ['4т', addMonths(today, -12)]
+      ]
+    },
+    {
+      title: 'Години',
+      periods: [
+        ['1г', addMonths(today, -12)],
+        ['2г', addMonths(today, -24)],
+        ['3г', addMonths(today, -36)],
+        ['4г', addMonths(today, -48)],
+        ['5г', addMonths(today, -60)]
+      ]
+    }
   ];
 
-  const badges = periods
-    .map(([label, targetDate]) => {
-      const previousTotal = findHistoricalPortfolioTotal(history, targetDate);
+  const html = groups
+    .map((group) => {
+      const periodHtml = group.periods
+        .map(([label, targetDate]) => {
+          const previousTotal = findHistoricalPortfolioTotal(history, targetDate);
+          return `
+            <span style="display:inline-flex;align-items:center;gap:3px;white-space:nowrap;">
+              <span style="color:#94a3b8;font-size:11px;font-weight:800;letter-spacing:0.01em;">${label}</span>
+              ${getPortfolioChangePill(currentTotal, previousTotal)}
+            </span>`;
+        })
+        .join('');
+
       return `
-        <span style="display:inline-flex;align-items:center;gap:4px;margin-right:6px;white-space:nowrap;">
-          <span class="unit-muted">${label}</span>
-          ${diffBadge(Number(currentTotal || 0), previousTotal)}
+        <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 7px;border-radius:12px;background:rgba(15,23,42,0.62);border:1px solid rgba(148,163,184,0.14);white-space:normal;">
+          <span style="color:#e5e7eb;font-size:11px;font-weight:900;letter-spacing:0.02em;white-space:nowrap;">${group.title}</span>
+          ${periodHtml}
         </span>`;
     })
     .join('');
@@ -211,7 +262,7 @@ function getPortfolioPeriodBadges(portfolioId, currentTotal) {
   cache[id] = cleanupPortfolioHistory(history);
   setPortfolioHistoryCache(cache);
 
-  return badges;
+  return html;
 }
 
 function sourceBadge(item) {
@@ -502,7 +553,7 @@ async function loadDashboard() {
               <span>Текущ портфейл</span>
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;">
                 <strong class="money">${fmtEuro(currentPortfolioTotal)}</strong>
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   ${portfolioPeriodBadges}
                 </div>
               </div>
