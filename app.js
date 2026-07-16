@@ -114,6 +114,7 @@ function setPriceCache(data) {
   localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(data));
 }
 const PORTFOLIO_HISTORY_CACHE_KEY = 'inv-portfolio-history-cache-v1';
+const PORTFOLIO_LAST_TOTAL_CACHE_KEY = 'inv-portfolio-last-total-cache-v1';
 
 function getDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -184,6 +185,34 @@ function getPortfolioChangePill(currentTotal, previousTotal) {
   }
 
   return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.42);font-weight:900;font-size:12px;white-space:nowrap;"><span style="font-size:15px;line-height:1;">▼</span>-${fmtNum(Math.abs(diffPct), 2)}%</span>`;
+}
+
+function getPortfolioLastTotalCache() {
+  try {
+    return JSON.parse(localStorage.getItem(PORTFOLIO_LAST_TOTAL_CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function setPortfolioLastTotalCache(data) {
+  localStorage.setItem(PORTFOLIO_LAST_TOTAL_CACHE_KEY, JSON.stringify(data));
+}
+
+function getPortfolioLastDisplayedBadge(portfolioId, currentTotal) {
+  const cache = getPortfolioLastTotalCache();
+  const id = String(portfolioId || 'default');
+  const previousTotal = Number(cache[id]?.total);
+  const badge = getPortfolioChangePill(Number(currentTotal || 0), previousTotal);
+
+  cache[id] = {
+    total: Number(currentTotal || 0),
+    updatedAt: new Date().toISOString()
+  };
+
+  setPortfolioLastTotalCache(cache);
+
+  return badge;
 }
 
 function getPortfolioPeriodBadges(portfolioId, currentTotal) {
@@ -541,6 +570,7 @@ async function loadDashboard() {
       return total + getDisplayValue(r, ext);
     }, 0);
 
+    const portfolioLastChangeBadge = getPortfolioLastDisplayedBadge(s.portfolioId, currentPortfolioTotal);
     const portfolioPeriodBadges = getPortfolioPeriodBadges(s.portfolioId, currentPortfolioTotal);
 
     if (dashboardView) {
@@ -553,6 +583,10 @@ async function loadDashboard() {
               <span>Текущ портфейл</span>
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;">
                 <strong class="money">${fmtEuro(currentPortfolioTotal)}</strong>
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 7px;border-radius:12px;background:rgba(15,23,42,0.62);border:1px solid rgba(148,163,184,0.14);white-space:nowrap;">
+                  <span style="color:#e5e7eb;font-size:11px;font-weight:900;letter-spacing:0.02em;white-space:nowrap;">Последно</span>
+                  ${portfolioLastChangeBadge}
+                </span>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   ${portfolioPeriodBadges}
                 </div>
