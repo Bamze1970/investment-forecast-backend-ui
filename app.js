@@ -113,48 +113,100 @@ function getPriceCache() {
 function setPriceCache(data) {
   localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(data));
 }
-const PORTFOLIO_MONTHLY_CACHE_KEY = 'inv-portfolio-monthly-cache-v1';
+const PORTFOLIO_HISTORY_CACHE_KEY = 'inv-portfolio-history-cache-v1';
 
-function getMonthKey(date = new Date()) {
+function getDateKey(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-function getPreviousMonthKey(date = new Date()) {
-  return getMonthKey(new Date(date.getFullYear(), date.getMonth() - 1, 1));
+function addDays(date, days) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }
 
-function getPortfolioMonthlyCache() {
+function addMonths(date, months) {
+  return new Date(date.getFullYear(), date.getMonth() + months, date.getDate());
+}
+
+function getPortfolioHistoryCache() {
   try {
-    return JSON.parse(localStorage.getItem(PORTFOLIO_MONTHLY_CACHE_KEY) || '{}');
+    return JSON.parse(localStorage.getItem(PORTFOLIO_HISTORY_CACHE_KEY) || '{}');
   } catch {
     return {};
   }
 }
 
-function setPortfolioMonthlyCache(data) {
-  localStorage.setItem(PORTFOLIO_MONTHLY_CACHE_KEY, JSON.stringify(data));
+function setPortfolioHistoryCache(data) {
+  localStorage.setItem(PORTFOLIO_HISTORY_CACHE_KEY, JSON.stringify(data));
 }
 
-function getPortfolioMonthlyBadge(portfolioId, currentTotal) {
-  const cache = getPortfolioMonthlyCache();
+function findHistoricalPortfolioTotal(history, targetDate) {
+  const targetKey = getDateKey(targetDate);
+  const keys = Object.keys(history || {})
+    .filter((key) => key <= targetKey)
+    .sort()
+    .reverse();
+
+  if (!keys.length) return undefined;
+
+  return Number(history[keys[0]]?.total);
+}
+
+function cleanupPortfolioHistory(history) {
+  const minDate = addDays(new Date(), -420);
+  const minKey = getDateKey(minDate);
+
+  Object.keys(history || {}).forEach((key) => {
+    if (key < minKey) delete history[key];
+  });
+
+  return history;
+}
+
+function getPortfolioPeriodBadges(portfolioId, currentTotal) {
+  const cache = getPortfolioHistoryCache();
   const id = String(portfolioId || 'default');
-  const currentMonthKey = getMonthKey();
-  const previousMonthKey = getPreviousMonthKey();
+  const today = new Date();
+  const todayKey = getDateKey(today);
 
   if (!cache[id]) cache[id] = {};
 
-  const previousTotal = Number(cache[id]?.[previousMonthKey]?.total);
+  const history = cache[id];
 
-  cache[id][currentMonthKey] = {
+  const periods = [
+    ['1W', addDays(today, -7)],
+    ['2W', addDays(today, -14)],
+    ['3W', addDays(today, -21)],
+    ['4W', addDays(today, -28)],
+    ['1M', addMonths(today, -1)],
+    ['1Q', addMonths(today, -3)],
+    ['2Q', addMonths(today, -6)],
+    ['3Q', addMonths(today, -9)],
+    ['4Q', addMonths(today, -12)]
+  ];
+
+  const badges = periods
+    .map(([label, targetDate]) => {
+      const previousTotal = findHistoricalPortfolioTotal(history, targetDate);
+      return `
+        <span style="display:inline-flex;align-items:center;gap:4px;margin-right:6px;white-space:nowrap;">
+          <span class="unit-muted">${label}</span>
+          ${diffBadge(Number(currentTotal || 0), previousTotal)}
+        </span>`;
+    })
+    .join('');
+
+  history[todayKey] = {
     total: Number(currentTotal || 0),
     updatedAt: new Date().toISOString()
   };
 
-  setPortfolioMonthlyCache(cache);
+  cache[id] = cleanupPortfolioHistory(history);
+  setPortfolioHistoryCache(cache);
 
-  return diffBadge(Number(currentTotal || 0), previousTotal);
+  return badges;
 }
 
 function sourceBadge(item) {
@@ -433,7 +485,7 @@ async function loadDashboard() {
       return total + getDisplayValue(r, ext);
     }, 0);
 
-    const portfolioMonthlyBadge = getPortfolioMonthlyBadge(s.portfolioId, currentPortfolioTotal);
+    const portfolioPeriodBadges = getPortfolioPeriodBadges(s.portfolioId, currentPortfolioTotal);
 
     if (dashboardView) {
       dashboardView.innerHTML = `
@@ -441,11 +493,15 @@ async function loadDashboard() {
           <h2>Dashboard</h2>
           <p class="note">Портфейл: <strong>${s.portfolioId}</strong></p>
           <div class="grid grid-4">
-                    <div class="metric">
+            <div class="metric">
               <span>Текущ портфейл</span>
-              <strong class="money">${fmtEuro(currentPortfolioTotal)}</strong>
-              <div style="margin-top:8px">${portfolioMonthlyBadge}</div>
-              <span class="unit-muted">спрямо предходен месец</span>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;">
+                <strong class="money">${fmtEuro(currentPortfolioTotal)}</strong>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                  ${portfolioPeriodBadges}
+                </div>
+              </div>
+              <span class="unit-muted">спрямо исторически стойности</span>
             </div>
             <div class="metric"><span>4Y Low</span><strong class="money">${fmtEuro(dashboardData.low_4y)}</strong></div>
             <div class="metric"><span>4Y Base</span><strong class="money">${fmtEuro(dashboardData.base_4y)}</strong></div>
